@@ -1,0 +1,29 @@
+name               = "waiver-worker"
+compatibility_date = "2024-06-05"
+main               = "src/index.mjs"
+workers_dev        = true                # “waiver-worker.<account>.workers.dev”
+
+[vars]                                 # quick, non-secret config
+ARCHERY_PIN   = "1234"
+LEGAL_VERSION = "2024-06"
+EMAIL_FROM    = "waivers@example.com"
+
+[[kv_namespaces]]
+binding = "PROPS_KV"
+id      = "aec4d5d52a9e41d6925a94a1d1b27207"             # replace after `wrangler kv:namespace create`
+
+[[r2_buckets]]
+binding     = "WAIVERS_R2"
+bucket_name = "waivers"                 # create at dash.cloudflare.com → R2
+
+[[d1_databases]]
+binding        = "waivers"
+database_name  = "waivers"
+database_id    = "0846e6ed-6eea-4b4f-a8dd-f9b9b232430e"             # replace after `wrangler d1 create`
+
+[[services]]                           # Cloudflare Browser Rendering
+binding    = "BROWSER"
+service    = "browser-worker"          # deploy the template service once → dash
+environment = "production"
+
+# optional: send via queue; here we call HTTP API directly in mail.js

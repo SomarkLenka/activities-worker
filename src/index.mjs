@@ -1,0 +1,95 @@
+import { nanoid }          from 'nanoid';
+import { htmlPage }        from './spa.js';
+import { makePDFs }        from './pdf.js';
+import { sendMail }        from './mail.js';
+import { json, bad }       from './resp.js';
+
+export default {
+  async fetch (request, env, ctx) {
+    const { pathname } = new URL(request.url);
+
+    try {
+      if (request.method === 'GET'  && pathname === '/')              return await htmlPage(env);
+      if (request.method === 'POST' && pathname === '/submit')        return submit(request, env);
+      if (request.method === 'GET'  && pathname === '/admin/search')  return search(request, env);
+      if (request.method === 'GET'  && pathname === '/status')        return status(env);
+      return new Response('Not found', { status: 404 });
+    } catch (err) {
+      console.error(err);
+      return new Response('Server error', { status: 500 });
+    }
+  }
+};
+
+/* ---------- /status ---------------------------------------------------- */
+async function status (env) {
+  const dbOK = await env.DB.prepare('SELECT 1').first();
+  return json({ ok: true, db: !!dbOK, ts: Date.now() });
+}
+
+/* ---------- /admin/search --------------------------------------------- */
+async function search (request, env) {
+  const url = new URL(request.url);
+  const qName  = url.searchParams.get('name')  ?? '';
+  const qEmail = url.searchParams.get('email') ?? '';
+  const qProp  = url.searchParams.get('prop')  ?? '';
+  const qDate  = url.searchParams.get('date')  ?? '';
+
+  const rows = await env.DB.prepare(
+      `SELECT * FROM submissions
+        WHERE guest_name  LIKE ?1
+          AND guest_email LIKE ?2
+          AND property_id LIKE ?3
+          AND checkin_date LIKE ?4
+        ORDER BY created_at DESC
+        LIMIT 200`
+    )
+    .bind(`%${qName}%`, `%${qEmail}%`, `%${qProp}%`, `%${qDate}%`)
+    .all();
+
+  return json({ rows });
+}
+
+/* ---------- /submit ---------------------------------------------------- */
+async function submit (request, env) {
+  const data = await request.json();
+
+  /* ---- quick validation ------------------------------------------------ */
+  const must = ['propertyId','checkinDate','guestName','guestEmail',
+                'activities','initials','signature','accepted'];
+  for (const k of must)
+    if (data[k] === undefined || data[k] === '' ||
+        (Array.isArray(data[k]) && !data[k].length))
+      return bad(`missing ${k}`);
+
+  if (data.accepted !== true)
+    return bad('master acceptance not ticked');
+
+  /* ---- write one submission row --------------------------------------- */
+  const subId = nanoid(10);
+  const now   = new Date().toISOString();
+
+  await env.DB.prepare(
+      'INSERT INTO submissions VALUES(?1,?2,?3,?4,?5,?6,?7)'
+    ).bind(
+      subId, now, data.propertyId, data.checkinDate,
+      data.guestName, data.guestEmail, JSON.stringify(data.activities)
+    ).run();
+
+  /* ---- generate N PDFs ------------------------------------------------- */
+  const pdfInfos = await makePDFs(data, subId, env);
+
+  /* ---- one row per PDF ------------------------------------------------- */
+  for (const p of pdfInfos)
+    await env.DB.prepare(
+        'INSERT INTO documents VALUES(?1,?2,?3,?4)'
+      ).bind(p.id, subId, p.activity, p.r2Key).run();
+
+  /* ---- e-mail ---------------------------------------------------------- */
+  const pin = data.activities.includes('archery') ? env.ARCHERY_PIN : null;
+  await sendMail(data, pdfInfos, pin, env);
+
+  return json({ ok: true,
+                emailed: pdfInfos.map(p => p.filename),
+                pin });
+}
