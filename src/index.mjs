@@ -24,8 +24,12 @@ export default {
 
 /* ---------- /status ---------------------------------------------------- */
 async function status (env) {
-  const dbOK = await env.DB.prepare('SELECT 1').first();
-  return json({ ok: true, db: !!dbOK, ts: Date.now() });
+  try {
+    const dbOK = await env.waivers.prepare('SELECT 1').first();
+    return json({ ok: true, db: !!dbOK, ts: Date.now() });
+  } catch (error) {
+    return json({ ok: false, error: error.message, ts: Date.now() });
+  }
 }
 
 /* ---------- /admin/search --------------------------------------------- */
@@ -36,7 +40,7 @@ async function search (request, env) {
   const qProp  = url.searchParams.get('prop')  ?? '';
   const qDate  = url.searchParams.get('date')  ?? '';
 
-  const rows = await env.DB.prepare(
+  const rows = await env.waivers.prepare(
       `SELECT * FROM submissions
         WHERE guest_name  LIKE ?1
           AND guest_email LIKE ?2
@@ -53,7 +57,9 @@ async function search (request, env) {
 
 /* ---------- /submit ---------------------------------------------------- */
 async function submit (request, env) {
+  console.log('Submit endpoint called');
   const data = await request.json();
+  console.log('Received data:', data);
 
   /* ---- quick validation ------------------------------------------------ */
   const must = ['propertyId','checkinDate','guestName','guestEmail',
@@ -70,21 +76,39 @@ async function submit (request, env) {
   const subId = nanoid(10);
   const now   = new Date().toISOString();
 
-  await env.DB.prepare(
-      'INSERT INTO submissions VALUES(?1,?2,?3,?4,?5,?6,?7)'
-    ).bind(
-      subId, now, data.propertyId, data.checkinDate,
-      data.guestName, data.guestEmail, JSON.stringify(data.activities)
-    ).run();
+  try {
+    await env.waivers.prepare(
+        'INSERT INTO submissions VALUES(?1,?2,?3,?4,?5,?6,?7)'
+      ).bind(
+        subId, now, data.propertyId, data.checkinDate,
+        data.guestName, data.guestEmail, JSON.stringify(data.activities)
+      ).run();
+    console.log('Submission saved to database');
+  } catch (dbError) {
+    console.error('Database error:', dbError);
+    return json({ ok: false, error: 'Database not initialized. Run migrations first.' }, 500);
+  }
 
   /* ---- generate N PDFs ------------------------------------------------- */
-  const pdfInfos = await makePDFs(data, subId, env);
+  let pdfInfos;
+  try {
+    pdfInfos = await makePDFs(data, subId, env);
+    console.log('PDFs generated:', pdfInfos.length);
+  } catch (pdfError) {
+    console.error('PDF generation error:', pdfError);
+    return json({ ok: false, error: 'PDF generation failed: ' + pdfError.message }, 500);
+  }
 
   /* ---- one row per PDF ------------------------------------------------- */
-  for (const p of pdfInfos)
-    await env.DB.prepare(
-        'INSERT INTO documents VALUES(?1,?2,?3,?4)'
-      ).bind(p.id, subId, p.activity, p.r2Key).run();
+  try {
+    for (const p of pdfInfos)
+      await env.waivers.prepare(
+          'INSERT INTO documents VALUES(?1,?2,?3,?4)'
+        ).bind(p.id, subId, p.activity, p.r2Key).run();
+    console.log('Document records saved');
+  } catch (docError) {
+    console.error('Document save error:', docError);
+  }
 
   const pin = data.activities.includes('archery') ? env.ARCHERY_PIN : null;
 

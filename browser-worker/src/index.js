@@ -15,13 +15,13 @@ export default {
 
   /**
    * Called from another Worker via
-   *    const pdfBuf = await env.BROWSER.htmlToPdf(html, { format: "A4" });
+   *    const pdfBuf = await env.BROWSER.htmlToPdf({ body: html, cf: { format: "A4" } });
    */
   async htmlToPdf(request, env) {
-    // request.body is the HTML string
-    return await env.browser.pdf(request.body, {
-      format: 'A4',            // default options; can be overridden
-      ...(request.cf || {})    // allow caller to pass puppeteer args
-    });
+    // request is an object with body (HTML string) and cf (options)
+    const html = request.body || request;  // support both formats
+    const options = request.cf || { format: 'A4' };
+
+    return await env.browser.pdf(html, options);
   }
 }

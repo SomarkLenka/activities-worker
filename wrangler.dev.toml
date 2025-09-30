@@ -1,0 +1,13 @@
+# Development configuration with remote browser-worker
+# Inherits from wrangler.toml and overrides specific settings
+
+# Use remote browser-worker service in local dev
+[[services]]
+binding = "BROWSER"
+service = "browser-worker"
+environment = "production"
+
+# Alternatively, you can mark specific bindings as remote
+# This is the new way to use remote services in local dev
+[dev]
+remote = ["BROWSER"]  # Use remote browser-worker even in local dev

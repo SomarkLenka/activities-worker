@@ -7,6 +7,10 @@ main               = "src/index.mjs"
 workers_dev        = true                # "waiver-worker.<account>.workers.dev"
 route = { pattern = "worker.rtxsecured.com/*", zone_name = "rtxsecured.com" }
 
+# wrangler.toml (wrangler v3.88.0^)
+[observability.logs]
+enabled = true
+
 [vars]                                 # quick, non-secret config
 ARCHERY_PIN   = "1234"
 LEGAL_VERSION = "2024-06"
@@ -15,7 +19,8 @@ DEV_MODE      = "true"                  # Set to "false" in production
 
 [[kv_namespaces]]
 binding = "PROPS_KV"
-id      = "aec4d5d52a9e41d6925a94a1d1b27207"             # replace after `wrangler kv:namespace create`
+id      = "aec4d5d52a9e41d6925a94a1d1b27207"             # production namespace
+preview_id = "6c095813078c4fb581dfd74fd2fdeda7"          # DEV_PROPS_KV for local development
 
 [[r2_buckets]]
 binding     = "WAIVERS_R2"
@@ -28,7 +33,8 @@ database_id    = "0846e6ed-6eea-4b4f-a8dd-f9b9b232430e"             # replace af
 
 [[services]]                           # Cloudflare Browser Rendering
 binding    = "BROWSER"
-service    = "browser-worker"          # deploy the template service once → dash
-environment = "production"
+service    = "browser-worker"          # This connects to the deployed browser-worker on Cloudflare
+# For local dev with remote browser-worker, use: wrangler dev --remote
+# Or configure remote bindings as shown in the docs
 
 # optional: send via queue; here we call HTTP API directly in mail.js

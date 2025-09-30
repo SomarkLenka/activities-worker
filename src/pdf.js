@@ -24,7 +24,7 @@ export async function makePDFs (data, subId, env) {
     </footer>`;
 
     /* ----- Cloudflare Browser Rendering --------------------------- */
-    const pdfBuffer = await env.BROWSER.htmlToPdf(html, { format: 'A4' });
+    const pdfBuffer = await env.BROWSER.htmlToPdf({ body: html, cf: { format: 'A4' } });
 
     /* ----- deterministic R2 key ----------------------------------- */
     const shortId  = nanoid(6);
