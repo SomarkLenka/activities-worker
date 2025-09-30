@@ -17,6 +17,7 @@ export async function htmlPage (env) {
   .activity-item:hover{background:#f0f7ff;border-color:#0070f3}
   .activity-item input[type="checkbox"]{margin-right:8px;cursor:pointer;width:18px;height:18px}
   .activity-item label{margin:0;cursor:pointer;flex:1}
+  .activity-item input[type="text"]{margin-left:auto;width:50px;text-align:center;padding:4px;border:1px solid #ccc;border-radius:4px}
   @media (max-width:480px){.activities-grid{grid-template-columns:1fr}}
 </style>
 
@@ -47,9 +48,6 @@ export async function htmlPage (env) {
       I have read and accept all risks.
     </label>
 
-    <h3>Initial each selected activity</h3>
-    <div id="initials"></div>
-
     <h3>Signature</h3>
     <canvas id="sign" width="600" height="200"></canvas><br>
     <button id="clearSig" type="button">Clear</button><br><br>
@@ -75,8 +73,8 @@ export async function htmlPage (env) {
 
   /* ---------- activity checkboxes ------------------------- */
   const actsDiv      = document.getElementById('activities');
-  const initialsDiv  = document.getElementById('initials');
-  const chosen       = new Set();
+  const masterCheck  = document.getElementById('master');
+  const chosen       = new Map(); // slug -> {itemDiv, initialInput}
 
   const activities = props[0]?.activities ?? [];   // assumes all props share list
   console.log("Activities array:", activities);
@@ -89,25 +87,38 @@ export async function htmlPage (env) {
     checkbox.type = 'checkbox';
     checkbox.id = 'activity-' + a.slug;
     checkbox.value = a.slug;
-    checkbox.onchange = () => {
-      if (checkbox.checked) {
-        chosen.add(a.slug);
-      } else {
-        chosen.delete(a.slug);
-      }
-      drawInitials();
-    };
 
     const label = document.createElement('label');
     label.htmlFor = 'activity-' + a.slug;
     label.textContent = a.label;
 
+    const initialInput = document.createElement('input');
+    initialInput.type = 'text';
+    initialInput.maxLength = 4;
+    initialInput.placeholder = 'Init';
+    initialInput.style.display = 'none';
+    initialInput.dataset.slug = a.slug;
+    initialInput.oninput = validateMasterCheckbox;
+
+    checkbox.onchange = () => {
+      if (checkbox.checked) {
+        chosen.set(a.slug, {itemDiv, initialInput});
+        initialInput.style.display = 'block';
+      } else {
+        chosen.delete(a.slug);
+        initialInput.style.display = 'none';
+        initialInput.value = '';
+      }
+      validateMasterCheckbox();
+    };
+
     itemDiv.appendChild(checkbox);
     itemDiv.appendChild(label);
+    itemDiv.appendChild(initialInput);
 
-    // Make entire div clickable
+    // Make entire div clickable except initial input
     itemDiv.onclick = (e) => {
-      if (e.target !== checkbox) {
+      if (e.target !== initialInput) {
         checkbox.checked = !checkbox.checked;
         checkbox.onchange();
       }
@@ -116,17 +127,21 @@ export async function htmlPage (env) {
     actsDiv.appendChild(itemDiv);
   });
 
-  function drawInitials () {
-    initialsDiv.innerHTML = '';
-    [...chosen].forEach(slug => {
-      const inp = document.createElement('input');
-      inp.maxLength   = 4;
-      inp.size        = 4;
-      inp.required    = true;
-      inp.dataset.slug = slug;
-      initialsDiv.append(slug + ': ', inp, ' ');
-    });
+  function validateMasterCheckbox() {
+    let allFilled = true;
+    for (const [slug, {initialInput}] of chosen) {
+      if (!initialInput.value.trim()) {
+        allFilled = false;
+        break;
+      }
+    }
+    masterCheck.disabled = !allFilled || chosen.size === 0;
+    if (masterCheck.disabled) {
+      masterCheck.checked = false;
+    }
   }
+
+  validateMasterCheckbox();
 
   /* ---------- signature pad -------------------------------- */
   const canvas = document.getElementById('sign');
@@ -155,16 +170,34 @@ export async function htmlPage (env) {
       checkinDate : document.getElementById('date').value,
       guestName   : document.getElementById('name').value,
       guestEmail  : document.getElementById('email').value,
-      activities  : [...chosen],
+      activities  : [...chosen.keys()],
       initials    : Object.fromEntries(
-                      [...initialsDiv.querySelectorAll('input')]
-                      .map(i => [i.dataset.slug, i.value])),
+                      [...chosen.entries()].map(([slug, {initialInput}]) =>
+                        [slug, initialInput.value])),
       signature   : canvas.toDataURL(),
       accepted    : document.getElementById('master').checked
     };
 
-    const res  = await fetch('/submit', { method: 'POST', body: JSON.stringify(data) });
-    const json = await res.json();
+    console.log("Submitting data:", data);
+
+    try {
+      const res  = await fetch('/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+
+      console.log("Response status:", res.status);
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error("Server error:", errorText);
+        alert("Error submitting form: " + errorText);
+        return;
+      }
+
+      const json = await res.json();
+      console.log("Response data:", json);
 
     document.getElementById('form').hidden   = true;
     document.getElementById('thanks').hidden = false;
@@ -210,6 +243,10 @@ export async function htmlPage (env) {
         '<h2>Email sent ✔</h2><p>Attachments:<br>' +
         json.emailed.join('<br>') + '</p>' +
         (json.pin ? '<p>Your Archery PIN is <b>' + json.pin + '</b></p>' : '');
+    }
+    } catch (error) {
+      console.error("Form submission error:", error);
+      alert("Error submitting form: " + error.message);
     }
   };
 </script>
