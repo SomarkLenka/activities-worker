@@ -12,8 +12,12 @@ export async function htmlPage (env) {
   body{font-family:system-ui;margin:2rem auto;max-width:640px;padding:0 1rem}
   label{display:block;margin:.4rem 0}
   canvas{border:1px solid #999;width:100%;touch-action:none}
-  .chip{display:inline-block;margin:4px;padding:.4rem 1rem;border:1px solid #666;border-radius:16px;cursor:pointer}
-  .chip.active{background:#0070f3;color:#fff}
+  .activities-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:10px;background:#f5f5f5;border-radius:8px}
+  .activity-item{display:flex;align-items:center;padding:8px;background:white;border-radius:4px;border:1px solid #ddd;cursor:pointer;transition:all 0.2s}
+  .activity-item:hover{background:#f0f7ff;border-color:#0070f3}
+  .activity-item input[type="checkbox"]{margin-right:8px;cursor:pointer;width:18px;height:18px}
+  .activity-item label{margin:0;cursor:pointer;flex:1}
+  @media (max-width:480px){.activities-grid{grid-template-columns:1fr}}
 </style>
 
 <body>
@@ -36,7 +40,7 @@ export async function htmlPage (env) {
     </label>
 
     <h3>Activities</h3>
-    <div id="activities"></div>
+    <div id="activities" class="activities-grid"></div>
 
     <label>
       <input id="master" type="checkbox" required>
@@ -61,23 +65,45 @@ export async function htmlPage (env) {
   const propSel = document.getElementById('prop');
   props.forEach(p => propSel.add(new Option(p.name, p.id)));
 
-  /* ---------- activity chips ------------------------------ */
+  /* ---------- activity checkboxes ------------------------- */
   const actsDiv      = document.getElementById('activities');
   const initialsDiv  = document.getElementById('initials');
   const chosen       = new Set();
 
   const activities = props[0]?.activities ?? [];   // assumes all props share list
   activities.forEach(a => {
-    const chip = document.createElement('span');
-    chip.textContent = a.label;
-    chip.className   = 'chip';
-    chip.dataset.slug = a.slug;
-    chip.onclick = () => {
-      chip.classList.toggle('active');
-      if (chosen.has(a.slug)) chosen.delete(a.slug); else chosen.add(a.slug);
+    const itemDiv = document.createElement('div');
+    itemDiv.className = 'activity-item';
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.id = 'activity-' + a.slug;
+    checkbox.value = a.slug;
+    checkbox.onchange = () => {
+      if (checkbox.checked) {
+        chosen.add(a.slug);
+      } else {
+        chosen.delete(a.slug);
+      }
       drawInitials();
     };
-    actsDiv.appendChild(chip);
+
+    const label = document.createElement('label');
+    label.htmlFor = 'activity-' + a.slug;
+    label.textContent = a.label;
+
+    itemDiv.appendChild(checkbox);
+    itemDiv.appendChild(label);
+
+    // Make entire div clickable
+    itemDiv.onclick = (e) => {
+      if (e.target !== checkbox) {
+        checkbox.checked = !checkbox.checked;
+        checkbox.onchange();
+      }
+    };
+
+    actsDiv.appendChild(itemDiv);
   });
 
   function drawInitials () {
