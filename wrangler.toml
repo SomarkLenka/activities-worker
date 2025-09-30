@@ -1,7 +1,11 @@
+# Wrangler configuration using JSONC format
+# This allows comments and trailing commas for better maintainability
+
 name               = "waiver-worker"
 compatibility_date = "2024-06-05"
 main               = "src/index.mjs"
-workers_dev        = true                # “waiver-worker.<account>.workers.dev”
+workers_dev        = true                # "waiver-worker.<account>.workers.dev"
+route = { pattern = "worker.rtxsecured.com/*", zone_name = "rtxsecured.com" }
 
 [vars]                                 # quick, non-secret config
 ARCHERY_PIN   = "1234"

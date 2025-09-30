@@ -61,7 +61,15 @@ export async function htmlPage (env) {
 
 <script type="module">
   /* ---------- bootstrap property list -------------------- */
-  const props = JSON.parse(atob('${props64}'));
+  let props = JSON.parse(atob('${props64}'));
+  console.log("Raw props data:", props);
+
+  // Handle both array and single object formats
+  if (!Array.isArray(props)) {
+    props = [props];
+  }
+  console.log("Props after array check:", props);
+
   const propSel = document.getElementById('prop');
   props.forEach(p => propSel.add(new Option(p.name, p.id)));
 
@@ -71,6 +79,8 @@ export async function htmlPage (env) {
   const chosen       = new Set();
 
   const activities = props[0]?.activities ?? [];   // assumes all props share list
+  console.log("Activities array:", activities);
+  console.log("Activities container:", actsDiv);
   activities.forEach(a => {
     const itemDiv = document.createElement('div');
     itemDiv.className = 'activity-item';
@@ -167,7 +177,7 @@ export async function htmlPage (env) {
 
       // Create download buttons for each PDF
       json.downloads.forEach(pdf => {
-        html += '<button onclick="window.open(\'' + pdf.url + '\', \'_blank\')" ';
+        html += \`<button onclick="window.open('\${pdf.url}', '_blank')" \`;
         html += 'style="padding:10px 20px;background:#0070f3;color:#fff;border:none;';
         html += 'border-radius:6px;cursor:pointer;font-size:16px">';
         html += '📄 Download ' + pdf.filename + '</button>';
@@ -179,7 +189,7 @@ export async function htmlPage (env) {
       if (json.downloads.length > 1) {
         html += '<button onclick="';
         json.downloads.forEach(pdf => {
-          html += 'window.open(\'' + pdf.url + '\', \'_blank\');';
+          html += \`window.open('\${pdf.url}', '_blank');\`;
         });
         html += '" style="padding:12px 24px;background:#28a745;color:#fff;border:none;';
         html += 'border-radius:6px;cursor:pointer;font-size:16px;margin-top:10px">';
