@@ -80,6 +80,7 @@ This application provides a complete digital waiver management solution built on
 - `ARCHERY_PIN` - PIN code for archery activity (default: "1234")
 - `LEGAL_VERSION` - Version identifier for legal documents (default: "2024-06")
 - `EMAIL_FROM` - From address for waiver emails (default: "waivers@example.com")
+- `DEV_MODE` - Enable development mode with PDF downloads instead of email (default: "true", set to "false" for production)
 
 **Bindings**:
 - `PROPS_KV` - KV namespace for property data
@@ -153,15 +154,41 @@ This application provides a complete digital waiver management solution built on
 
 ## Development
 
+### Development Mode
+
+The application includes a development mode that bypasses email sending and allows direct PDF downloads. This is useful for testing without configuring email services.
+
+**When `DEV_MODE="true"` in `wrangler.toml`:**
+- Form submissions generate PDFs as normal
+- PDFs are stored in R2 but NOT emailed
+- User receives download buttons for each PDF
+- Multiple PDFs can be downloaded individually or all at once
+- A `/download/:key` endpoint is available for retrieving PDFs
+
+**To enable/disable development mode:**
+```toml
+# wrangler.toml
+[vars]
+DEV_MODE = "true"   # Development - PDFs downloadable
+# DEV_MODE = "false" # Production - PDFs emailed
+```
+
 ### Local Development
 ```bash
 # Terminal 1 - Browser worker
 cd browser-worker
 wrangler dev
 
-# Terminal 2 - Main worker
+# Terminal 2 - Main worker (with DEV_MODE enabled)
 wrangler dev
 ```
+
+**Development Mode Features:**
+- Individual download buttons for each activity waiver
+- "Download All" button when multiple PDFs are generated
+- Visual indicator showing development mode is active
+- No email configuration required
+- PDFs still stored in R2 for persistence
 
 ### Testing
 Browser worker includes test setup with Vitest:

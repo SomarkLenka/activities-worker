@@ -132,10 +132,49 @@ export async function htmlPage (env) {
 
     document.getElementById('form').hidden   = true;
     document.getElementById('thanks').hidden = false;
-    document.getElementById('thanks').innerHTML =
-      '<h2>Email sent ✔</h2><p>Attachments:<br>' +
-      json.emailed.join('<br>') + '</p>' +
-      (json.pin ? '<p>Your Archery PIN is <b>' + json.pin + '</b></p>' : '');
+
+    if (json.devMode) {
+      // Development mode - show download links
+      let html = '<h2>Waivers Generated ✔</h2>';
+      html += '<p>Download your waivers:</p>';
+      html += '<div style="display:flex;flex-direction:column;gap:10px;margin:20px 0">';
+
+      // Create download buttons for each PDF
+      json.downloads.forEach(pdf => {
+        html += '<button onclick="window.open(\'' + pdf.url + '\', \'_blank\')" ';
+        html += 'style="padding:10px 20px;background:#0070f3;color:#fff;border:none;';
+        html += 'border-radius:6px;cursor:pointer;font-size:16px">';
+        html += '📄 Download ' + pdf.filename + '</button>';
+      });
+
+      html += '</div>';
+
+      // Add button to download all at once
+      if (json.downloads.length > 1) {
+        html += '<button onclick="';
+        json.downloads.forEach(pdf => {
+          html += 'window.open(\'' + pdf.url + '\', \'_blank\');';
+        });
+        html += '" style="padding:12px 24px;background:#28a745;color:#fff;border:none;';
+        html += 'border-radius:6px;cursor:pointer;font-size:16px;margin-top:10px">';
+        html += '📦 Download All (' + json.downloads.length + ' PDFs)</button>';
+      }
+
+      if (json.pin) {
+        html += '<p style="margin-top:20px">Your Archery PIN is <b>' + json.pin + '</b></p>';
+      }
+
+      html += '<p style="margin-top:20px;color:#666;font-size:14px">';
+      html += '⚠️ Development Mode - PDFs are stored but not emailed</p>';
+
+      document.getElementById('thanks').innerHTML = html;
+    } else {
+      // Production mode - email confirmation
+      document.getElementById('thanks').innerHTML =
+        '<h2>Email sent ✔</h2><p>Attachments:<br>' +
+        json.emailed.join('<br>') + '</p>' +
+        (json.pin ? '<p>Your Archery PIN is <b>' + json.pin + '</b></p>' : '');
+    }
   };
 </script>
 </body>

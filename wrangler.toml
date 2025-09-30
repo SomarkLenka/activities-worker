@@ -7,6 +7,7 @@ workers_dev        = true                # “waiver-worker.<account>.workers.de
 ARCHERY_PIN   = "1234"
 LEGAL_VERSION = "2024-06"
 EMAIL_FROM    = "waivers@example.com"
+DEV_MODE      = "true"                  # Set to "false" in production
 
 [[kv_namespaces]]
 binding = "PROPS_KV"

@@ -13,6 +13,7 @@ export default {
       if (request.method === 'POST' && pathname === '/submit')        return submit(request, env);
       if (request.method === 'GET'  && pathname === '/admin/search')  return search(request, env);
       if (request.method === 'GET'  && pathname === '/status')        return status(env);
+      if (request.method === 'GET'  && pathname.startsWith('/download/')) return downloadPDF(request, env);
       return new Response('Not found', { status: 404 });
     } catch (err) {
       console.error(err);
@@ -85,11 +86,56 @@ async function submit (request, env) {
         'INSERT INTO documents VALUES(?1,?2,?3,?4)'
       ).bind(p.id, subId, p.activity, p.r2Key).run();
 
-  /* ---- e-mail ---------------------------------------------------------- */
   const pin = data.activities.includes('archery') ? env.ARCHERY_PIN : null;
+
+  /* ---- check if in dev mode -------------------------------------------- */
+  if (env.DEV_MODE === 'true') {
+    // In dev mode, return download URLs instead of sending email
+    const downloads = pdfInfos.map(p => ({
+      filename: p.filename,
+      url: `/download/${p.r2Key}`
+    }));
+
+    return json({
+      ok: true,
+      devMode: true,
+      downloads,
+      pin
+    });
+  }
+
+  /* ---- e-mail (production only) ---------------------------------------- */
   await sendMail(data, pdfInfos, pin, env);
 
   return json({ ok: true,
                 emailed: pdfInfos.map(p => p.filename),
                 pin });
+}
+
+/* ---------- /download/:key --------------------------------------------- */
+async function downloadPDF (request, env) {
+  const { pathname } = new URL(request.url);
+  const r2Key = pathname.replace('/download/', '');
+
+  // Only allow in dev mode
+  if (env.DEV_MODE !== 'true') {
+    return new Response('Downloads only available in dev mode', { status: 403 });
+  }
+
+  const object = await env.WAIVERS_R2.get(r2Key);
+
+  if (!object) {
+    return new Response('PDF not found', { status: 404 });
+  }
+
+  // Extract filename from the key
+  const filename = r2Key.split('/').pop();
+
+  return new Response(object.body, {
+    headers: {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Cache-Control': 'private, max-age=300'
+    }
+  });
 }
