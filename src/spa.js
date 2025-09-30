@@ -9,15 +9,26 @@ export async function htmlPage (env) {
 <title>Activity Waiver</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
-  body{font-family:system-ui;margin:2rem auto;max-width:640px;padding:0 1rem}
+  body{font-family:system-ui;margin:2rem auto;max-width:1000px;padding:0 1rem}
   label{display:block;margin:.4rem 0}
-  canvas{border:1px solid #999;width:100%;touch-action:none}
-  .activities-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:10px;background:#f5f5f5;border-radius:8px}
-  .activity-item{display:flex;align-items:center;padding:8px;background:white;border-radius:4px;border:1px solid #ddd;cursor:pointer;transition:all 0.2s}
+  canvas{border:1px solid #999;width:75%;touch-action:none}
+  .activities-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;column-gap:24px;padding:10px;background:#f5f5f5;border-radius:8px}
+  .activity-row{display:flex;gap:8px;align-items:center}
+  .activity-item{display:flex;align-items:center;padding:8px;background:white;border-radius:4px;border:1px solid #ddd;cursor:pointer;transition:all 0.2s;flex:1;position:relative;min-height:64px;overflow:visible}
   .activity-item:hover{background:#f0f7ff;border-color:#0070f3}
-  .activity-item input[type="checkbox"]{margin-right:8px;cursor:pointer;width:18px;height:18px}
-  .activity-item label{margin:0;cursor:pointer;flex:1}
-  .activity-item input[type="text"]{margin-left:auto;width:50px;text-align:center;padding:4px;border:1px solid #ccc;border-radius:4px}
+  .activity-item input[type="checkbox"]{margin-right:8px;cursor:pointer;width:18px;height:18px;flex-shrink:0}
+  .activity-item label{margin:0;cursor:pointer;flex:1;display:flex;align-items:center;gap:8px;position:relative;z-index:1;justify-content:space-between}
+  .activity-label-text{white-space:nowrap;flex-shrink:0;min-width:120px}
+  .risk-chip-wrapper{display:flex;align-items:center;justify-content:flex-end;min-width:200px;width:200px;transition:all 0.3s ease;position:relative;overflow:visible}
+  .risk-chip{padding:6px 12px;border-radius:12px;color:white;font-size:11px;font-weight:500;white-space:nowrap;display:inline-block;width:100px;text-align:center;transition:transform 0.3s ease;box-sizing:border-box;flex-shrink:0;position:relative;z-index:2}
+  .risk-chip-wrapper:hover .risk-chip{transform:translateX(-110px)}
+  .risk-low{background:#16a34a}
+  .risk-medium{background:#f97316}
+  .risk-high{background:#dc2626}
+  .risk-details{position:absolute;right:0;width:190px;opacity:0;font-size:10px;line-height:1.3;color:#333;transition:opacity 0.3s ease;padding-left:108px;display:block;box-sizing:border-box}
+  .risk-chip-wrapper:hover .risk-details{opacity:1}
+  .activity-initial{width:45px;height:45px;text-align:center;padding:0;border:1px solid #ccc;border-radius:4px;visibility:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:14px}
+  .activity-initial.visible{visibility:visible}
   @media (max-width:480px){.activities-grid{grid-template-columns:1fr}}
 </style>
 
@@ -80,6 +91,9 @@ export async function htmlPage (env) {
   console.log("Activities array:", activities);
   console.log("Activities container:", actsDiv);
   activities.forEach(a => {
+    const rowDiv = document.createElement('div');
+    rowDiv.className = 'activity-row';
+
     const itemDiv = document.createElement('div');
     itemDiv.className = 'activity-item';
 
@@ -90,23 +104,59 @@ export async function htmlPage (env) {
 
     const label = document.createElement('label');
     label.htmlFor = 'activity-' + a.slug;
-    label.textContent = a.label;
+
+    const labelText = document.createElement('span');
+    labelText.className = 'activity-label-text';
+    labelText.textContent = a.label;
+    label.appendChild(labelText);
+
+    if (a.risk) {
+      const chipWrapper = document.createElement('div');
+      chipWrapper.className = 'risk-chip-wrapper';
+
+      const riskChip = document.createElement('span');
+      riskChip.className = 'risk-chip risk-' + a.risk;
+      riskChip.textContent = a.risk.charAt(0).toUpperCase() + a.risk.slice(1) + ' Risk';
+
+      const riskDetails = document.createElement('span');
+      riskDetails.className = 'risk-details';
+
+      // Define risk details based on activity
+      const riskDescriptions = {
+        'archery': 'Minor injuries from equipment handling, requires safety training',
+        'kayaking': 'Water-related risks, requires swimming ability and life vest',
+        'ziplining': 'Height-related risks, equipment failure possible, requires harness',
+        'snorkeling': 'Water exposure, marine life encounters, breathing equipment',
+        'safari-tour': 'Wildlife observation, minimal direct contact risks',
+        'boat-tour': 'Water travel, weather dependent, life jackets required',
+        'spelunking': 'Confined spaces, uneven terrain, lighting dependent',
+        'scuba-diving': 'Deep water, decompression risks, certification required',
+        'paragliding': 'High altitude flight, weather dependent, serious injury possible',
+        'bungee-jumping': 'Extreme height, cord failure possible, serious injury or death possible'
+      };
+
+      riskDetails.textContent = riskDescriptions[a.slug] || 'Activity-specific risks apply';
+
+      chipWrapper.appendChild(riskChip);
+      chipWrapper.appendChild(riskDetails);
+      label.appendChild(chipWrapper);
+    }
 
     const initialInput = document.createElement('input');
     initialInput.type = 'text';
     initialInput.maxLength = 4;
     initialInput.placeholder = 'Init';
-    initialInput.style.display = 'none';
+    initialInput.className = 'activity-initial';
     initialInput.dataset.slug = a.slug;
     initialInput.oninput = validateMasterCheckbox;
 
     checkbox.onchange = () => {
       if (checkbox.checked) {
         chosen.set(a.slug, {itemDiv, initialInput});
-        initialInput.style.display = 'block';
+        initialInput.classList.add('visible');
       } else {
         chosen.delete(a.slug);
-        initialInput.style.display = 'none';
+        initialInput.classList.remove('visible');
         initialInput.value = '';
       }
       validateMasterCheckbox();
@@ -114,17 +164,16 @@ export async function htmlPage (env) {
 
     itemDiv.appendChild(checkbox);
     itemDiv.appendChild(label);
-    itemDiv.appendChild(initialInput);
 
-    // Make entire div clickable except initial input
-    itemDiv.onclick = (e) => {
-      if (e.target !== initialInput) {
-        checkbox.checked = !checkbox.checked;
-        checkbox.onchange();
-      }
+    // Make entire div clickable
+    itemDiv.onclick = () => {
+      checkbox.checked = !checkbox.checked;
+      checkbox.onchange();
     };
 
-    actsDiv.appendChild(itemDiv);
+    rowDiv.appendChild(itemDiv);
+    rowDiv.appendChild(initialInput);
+    actsDiv.appendChild(rowDiv);
   });
 
   function validateMasterCheckbox() {
