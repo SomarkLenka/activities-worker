@@ -13,7 +13,7 @@ The Rentals Team`;
 
   try {
     const { data: emailData, error } = await resend.emails.send({
-      from: env.EMAIL_FROM,
+      from: `Activity Waivers <${env.EMAIL_FROM}>`,
       to: data.guestEmail,
       subject: 'Your activity waiver(s)',
       text: bodyText,

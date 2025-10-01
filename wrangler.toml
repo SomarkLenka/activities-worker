@@ -1,12 +1,12 @@
 # Wrangler configuration using JSONC format
 # This allows comments and trailing commas for better maintainability
 
-name               = "waiver-worker"
+name               = "activities-worker"
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat_v2"]
-main               = "src/index.mjs"
+main               = "src/index.js"
 workers_dev        = true                # "waiver-worker.<account>.workers.dev"
-route = { pattern = "worker.rtxsecured.com/*", zone_name = "rtxsecured.com" }
+route = { pattern = "activities.rtxsecured.com/*", zone_name = "rtxsecured.com" }
 
 # wrangler.toml (wrangler v3.88.0^)
 [observability.logs]
