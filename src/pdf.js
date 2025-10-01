@@ -1,6 +1,5 @@
 import { nanoid } from 'nanoid';
-
-const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 
 export async function makePDFs (data, subId, env) {
   const now = new Date();
@@ -10,51 +9,81 @@ export async function makePDFs (data, subId, env) {
 
   const results = [];
 
-  for (let i = 0; i < data.activities.length; i++) {
-    const act = data.activities[i];
+  for (const act of data.activities) {
+    const pdfDoc = await PDFDocument.create();
+    const page = pdfDoc.addPage([595, 842]); // A4 size in points
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-    /* ----- minimal HTML template ---------------------------------- */
-    const html = `
-    <!doctype html><meta charset="utf-8">
-    <style>body{font-family:Arial;font-size:11pt;margin:2cm}</style>
-    <h1>${act.toUpperCase()} — Release of Liability</h1>
-    <p>Property  : ${data.propertyId}</p>
-    <p>Check-in  : ${data.checkinDate}</p>
-    <p>Guest     : ${data.guestName}</p>
-    <p>Initials  : ${data.initials[act]}</p>
-    <img src="${data.signature}" width="300">
-    <footer style="position:fixed;bottom:1cm;font-size:8pt;width:100%;text-align:center">
-      Version ${env.LEGAL_VERSION} • hash ${subId}
-    </footer>`;
+    const { width, height } = page.getSize();
+    let yPos = height - 80;
 
-    /* ----- Cloudflare Browser Rendering with retry ---------------- */
-    let pdfBuffer;
-    let retries = 5;
-    let lastError;
+    /* ----- Title -------------------------------------------------- */
+    page.drawText(`${act.toUpperCase()} — Release of Liability`, {
+      x: 50,
+      y: yPos,
+      size: 20,
+      font: boldFont,
+      color: rgb(0, 0, 0),
+    });
 
-    while (retries > 0) {
+    yPos -= 60;
+
+    /* ----- Property details --------------------------------------- */
+    const details = [
+      `Property  : ${data.propertyId}`,
+      `Check-in  : ${data.checkinDate}`,
+      `Guest     : ${data.guestName}`,
+      `Initials  : ${data.initials[act]}`
+    ];
+
+    for (const detail of details) {
+      page.drawText(detail, {
+        x: 50,
+        y: yPos,
+        size: 12,
+        font,
+        color: rgb(0, 0, 0),
+      });
+      yPos -= 25;
+    }
+
+    /* ----- Signature image ---------------------------------------- */
+    if (data.signature) {
       try {
-        pdfBuffer = await env.BROWSER.htmlToPdf({ body: html, cf: { format: 'A4' } });
-        break;
-      } catch (err) {
-        lastError = err;
-        retries--;
-        const isRateLimit = err.message && (err.message.includes('429') || err.message.includes('Rate limit'));
+        const signatureData = data.signature.split(',')[1];
+        const signatureBytes = Uint8Array.from(atob(signatureData), c => c.charCodeAt(0));
+        const signatureImage = await pdfDoc.embedPng(signatureBytes);
 
-        if (isRateLimit && retries > 0) {
-          const waitTime = (6 - retries) * 2000; // Exponential backoff: 2s, 4s, 6s, 8s
-          console.log(`Rate limit hit for ${act}, waiting ${waitTime/1000}s (${retries} retries left)...`);
-          await sleep(waitTime);
-        } else if (retries > 0) {
-          console.log(`Error generating PDF for ${act}: ${err.message}, retrying in 1s...`);
-          await sleep(1000);
-        }
+        const signatureDims = signatureImage.scale(0.5);
+        page.drawImage(signatureImage, {
+          x: 50,
+          y: yPos - signatureDims.height,
+          width: signatureDims.width,
+          height: signatureDims.height,
+        });
+      } catch (err) {
+        console.error('Error embedding signature:', err);
+        page.drawText('[Signature image could not be embedded]', {
+          x: 50,
+          y: yPos - 20,
+          size: 10,
+          font,
+          color: rgb(0.5, 0.5, 0.5),
+        });
       }
     }
 
-    if (!pdfBuffer) {
-      throw new Error(`Failed to generate PDF for ${act} after retries: ${lastError?.message || 'unknown error'}`);
-    }
+    /* ----- Footer ------------------------------------------------- */
+    page.drawText(`Version ${env.LEGAL_VERSION} • hash ${subId}`, {
+      x: width / 2 - 100,
+      y: 30,
+      size: 8,
+      font,
+      color: rgb(0.5, 0.5, 0.5),
+    });
+
+    const pdfBytes = await pdfDoc.save();
 
     /* ----- deterministic R2 key ----------------------------------- */
     const shortId  = nanoid(6);
@@ -62,16 +91,11 @@ export async function makePDFs (data, subId, env) {
     const key      = `waivers/${y}/${m}/${d}/${data.propertyId}/${act}/` +
                      `${data.guestName.toLowerCase().replace(/[^a-z]/g,'-')}-${shortId}.pdf`;
 
-    await env.WAIVERS_R2.put(key, pdfBuffer, {
+    await env.WAIVERS_R2.put(key, pdfBytes, {
       httpMetadata: { contentType: 'application/pdf' }
     });
 
-    results.push({ id: shortId, activity: act, filename, r2Key: key, bytes: pdfBuffer });
-
-    // Add delay between requests to avoid rate limiting (except after last one)
-    if (i < data.activities.length - 1) {
-      await sleep(500);
-    }
+    results.push({ id: shortId, activity: act, filename, r2Key: key, bytes: pdfBytes });
   }
 
   return results;
