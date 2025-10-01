@@ -42,13 +42,14 @@ export default {
     const html = request.body || request;  // support both formats
     const options = request.cf || { format: 'A4' };
 
+    let browser;
     try {
       // Launch browser using Cloudflare Puppeteer
-      const browser = await puppeteer.launch(env.BROWSER);
+      browser = await puppeteer.launch(env.BROWSER);
       const page = await browser.newPage();
 
       // Set the HTML content
-      await page.setContent(html);
+      await page.setContent(html, { waitUntil: 'networkidle0' });
 
       // Generate PDF with options
       const pdf = await page.pdf({
@@ -57,12 +58,18 @@ export default {
         margin: { top: '1cm', right: '1cm', bottom: '1cm', left: '1cm' }
       });
 
-      await browser.close();
-
       return pdf;
     } catch (error) {
       console.error('PDF generation error:', error);
       throw error;
+    } finally {
+      if (browser) {
+        try {
+          await browser.close();
+        } catch (closeError) {
+          console.error('Error closing browser:', closeError);
+        }
+      }
     }
   }
 }

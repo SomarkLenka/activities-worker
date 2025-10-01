@@ -1,5 +1,7 @@
 import { nanoid } from 'nanoid';
 
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
 export async function makePDFs (data, subId, env) {
   const now = new Date();
   const y = now.getUTCFullYear();
@@ -8,7 +10,9 @@ export async function makePDFs (data, subId, env) {
 
   const results = [];
 
-  for (const act of data.activities) {
+  for (let i = 0; i < data.activities.length; i++) {
+    const act = data.activities[i];
+
     /* ----- minimal HTML template ---------------------------------- */
     const html = `
     <!doctype html><meta charset="utf-8">
@@ -23,8 +27,34 @@ export async function makePDFs (data, subId, env) {
       Version ${env.LEGAL_VERSION} • hash ${subId}
     </footer>`;
 
-    /* ----- Cloudflare Browser Rendering --------------------------- */
-    const pdfBuffer = await env.BROWSER.htmlToPdf({ body: html, cf: { format: 'A4' } });
+    /* ----- Cloudflare Browser Rendering with retry ---------------- */
+    let pdfBuffer;
+    let retries = 5;
+    let lastError;
+
+    while (retries > 0) {
+      try {
+        pdfBuffer = await env.BROWSER.htmlToPdf({ body: html, cf: { format: 'A4' } });
+        break;
+      } catch (err) {
+        lastError = err;
+        retries--;
+        const isRateLimit = err.message && (err.message.includes('429') || err.message.includes('Rate limit'));
+
+        if (isRateLimit && retries > 0) {
+          const waitTime = (6 - retries) * 2000; // Exponential backoff: 2s, 4s, 6s, 8s
+          console.log(`Rate limit hit for ${act}, waiting ${waitTime/1000}s (${retries} retries left)...`);
+          await sleep(waitTime);
+        } else if (retries > 0) {
+          console.log(`Error generating PDF for ${act}: ${err.message}, retrying in 1s...`);
+          await sleep(1000);
+        }
+      }
+    }
+
+    if (!pdfBuffer) {
+      throw new Error(`Failed to generate PDF for ${act} after retries: ${lastError?.message || 'unknown error'}`);
+    }
 
     /* ----- deterministic R2 key ----------------------------------- */
     const shortId  = nanoid(6);
@@ -37,6 +67,11 @@ export async function makePDFs (data, subId, env) {
     });
 
     results.push({ id: shortId, activity: act, filename, r2Key: key, bytes: pdfBuffer });
+
+    // Add delay between requests to avoid rate limiting (except after last one)
+    if (i < data.activities.length - 1) {
+      await sleep(500);
+    }
   }
 
   return results;

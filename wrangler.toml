@@ -2,7 +2,8 @@
 # This allows comments and trailing commas for better maintainability
 
 name               = "waiver-worker"
-compatibility_date = "2024-06-05"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat_v2"]
 main               = "src/index.mjs"
 workers_dev        = true                # "waiver-worker.<account>.workers.dev"
 route = { pattern = "worker.rtxsecured.com/*", zone_name = "rtxsecured.com" }
@@ -14,8 +15,8 @@ enabled = true
 [vars]                                 # quick, non-secret config
 ARCHERY_PIN   = "1234"
 LEGAL_VERSION = "2024-06"
-EMAIL_FROM    = "waivers@example.com"
-DEV_MODE      = "true"                  # Set to "false" in production
+EMAIL_FROM    = "noreply@waivers.rtxsecured.com"
+DEV_MODE      = "false"                 # Set to "false" in production
 
 [[kv_namespaces]]
 binding = "PROPS_KV"
@@ -37,4 +38,6 @@ preview_database_id = "a26bc6c3-64d9-45ab-80c8-8a10be058c27"           # replace
 binding    = "BROWSER"
 service    = "browser-worker"          # This connects to the deployed browser-worker on Cloudflare
 
-# optional: send via queue; here we call HTTP API directly in mail.js
+[[services]]                           # Email Worker Service Binding
+binding    = "EMAIL_WORKER"
+service    = "email-worker"            # This connects to the deployed email worker on Cloudflare

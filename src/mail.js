@@ -1,45 +1,55 @@
+import { createMimeMessage } from 'mimetext';
+
 export async function sendMail (data, pdfs, pin, env) {
-  const boundary = 'BOUNDARY-' + Math.random().toString(36).slice(2);
-  let body = '';
+  const msg = createMimeMessage();
 
-  /* ---- headers -------------------------------------------------- */
-  body += `From: ${env.EMAIL_FROM}\r\n`;
-  body += `To: ${data.guestEmail}\r\n`;
-  body += `Subject: Your activity waiver(s)\r\n`;
-  body += 'MIME-Version: 1.0\r\n';
-  body += `Content-Type: multipart/mixed; boundary=${boundary}\r\n\r\n`;
+  msg.setSender({ name: 'Property Waivers', addr: env.EMAIL_FROM });
+  msg.setRecipient(data.guestEmail);
+  msg.setSubject('Your activity waiver(s)');
 
-  /* ---- plain-text part ------------------------------------------ */
-  body += `--${boundary}\r\n`;
-  body += 'Content-Type: text/plain; charset=utf-8\r\n\r\n';
-  body += `Hi ${data.guestName},
+  /* ---- plain-text body ------------------------------------------ */
+  const bodyText = `Hi ${data.guestName},
 
 Thank you for completing your waiver for ${data.propertyId}.
-Attached:${pdfs.map(p => ' ' + p.filename).join(', ')}
+Attached: ${pdfs.map(p => p.filename).join(', ')}
 
-${pin ? 'Your Archery PIN is ' + pin + '\n\n' : ''}
-Regards,
-The Rentals Team
-\r\n`;
+${pin ? 'Your Archery PIN is ' + pin + '\n\n' : ''}Regards,
+The Rentals Team`;
 
-  /* ---- one attachment per PDF ----------------------------------- */
-  for (const p of pdfs) {
-    body += `--${boundary}\r\n`;
-    body += 'Content-Type: application/pdf\r\n';
-    body += 'Content-Transfer-Encoding: base64\r\n';
-    body += `Content-Disposition: attachment; filename="${p.filename}"\r\n\r\n`;
-    body += btoa(String.fromCharCode(...new Uint8Array(p.bytes))) + '\r\n';
-  }
-  body += `--${boundary}--`;
-
-  /* ---- send ------------------------------------------------------ */
-  await fetch('https://api.cloudflare.com/client/v4/accounts/' +
-              env.CLOUDFLARE_ACCOUNT_ID + '/email/send', {
-    method:  'POST',
-    headers: {
-      'Content-Type': 'text/plain',
-      'Authorization': 'Bearer ' + env.CLOUDFLARE_API_TOKEN   // put as secret
-    },
-    body
+  msg.addMessage({
+    contentType: 'text/plain',
+    data: bodyText
   });
+
+  /* ---- add PDF attachments ------------------------------------- */
+  for (const p of pdfs) {
+    const base64Data = btoa(String.fromCharCode(...new Uint8Array(p.bytes)));
+
+    msg.addAttachment({
+      filename: p.filename,
+      contentType: 'application/pdf',
+      data: base64Data
+    });
+  }
+
+  /* ---- send via email worker service --------------------------- */
+  try {
+    const response = await env.EMAIL_WORKER.sendEmail({
+      from: env.EMAIL_FROM,
+      to: data.guestEmail,
+      subject: 'Your activity waiver(s)',
+      text: bodyText,
+      attachments: pdfs.map(p => ({
+        filename: p.filename,
+        content: btoa(String.fromCharCode(...new Uint8Array(p.bytes)))
+      }))
+    });
+
+    if (!response.ok) {
+      throw new Error(response.error || 'Email worker returned error');
+    }
+  } catch (error) {
+    console.error('Email send error:', error);
+    throw new Error('Failed to send email: ' + error.message);
+  }
 }

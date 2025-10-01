@@ -129,7 +129,13 @@ async function submit (request, env) {
   }
 
   /* ---- e-mail (production only) ---------------------------------------- */
-  await sendMail(data, pdfInfos, pin, env);
+  try {
+    await sendMail(data, pdfInfos, pin, env);
+    console.log('Email sent successfully');
+  } catch (emailError) {
+    console.error('Email sending failed:', emailError);
+    return json({ ok: false, error: 'Email sending failed: ' + emailError.message }, 500);
+  }
 
   return json({ ok: true,
                 emailed: pdfInfos.map(p => p.filename),
