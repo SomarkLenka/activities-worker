@@ -72,7 +72,7 @@ export async function htmlPage (env) {
   .acceptance-box input[type="checkbox"]:disabled{cursor:not-allowed;opacity:0.5}
   .acceptance-box .tooltip{display:none;position:absolute;bottom:100%;left:50%;transform:translateX(-50%);background:#1e293b;color:white;padding:0.5rem 1rem;border-radius:6px;font-size:0.875rem;white-space:nowrap;margin-bottom:0.5rem;font-weight:400}
   .acceptance-box .tooltip::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:6px solid transparent;border-top-color:#1e293b}
-  .acceptance-box:hover .tooltip{display:block}
+  .acceptance-box:has(input[type="checkbox"]:disabled):hover .tooltip{display:block}
   .signature-container{display:flex;flex-direction:column;align-items:center;gap:12px;padding:1.5rem;background:#f8fafc;border-radius:10px;border:2px solid #e2e8f0}
   canvas{border:2px dashed #cbd5e1;border-radius:8px;width:90%;max-width:600px;touch-action:none;display:block;background:white}
   button{font-weight:600;border:none;cursor:pointer;transition:all 0.2s;font-size:1rem;border-radius:8px;font-family:inherit}
