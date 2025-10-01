@@ -66,9 +66,13 @@ export async function htmlPage (env) {
   .activity-initial{width:50px;height:50px;text-align:center;padding:0;border:2px solid #cbd5e1;border-radius:8px;visibility:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;background:white;transition:all 0.2s}
   .activity-initial.visible{visibility:visible;border-color:#3b82f6}
   .activity-initial:focus{outline:none;border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,0.1)}
-  .acceptance-box{background:#fef3c7;border:2px solid #fbbf24;border-radius:10px;padding:1rem;margin:1.5rem 0;display:flex;align-items:center;gap:0.75rem}
+  .acceptance-box{background:#fef3c7;border:2px solid #fbbf24;border-radius:10px;padding:1rem;margin:1.5rem 0;display:flex;align-items:center;gap:0.75rem;position:relative}
   .acceptance-box input[type="checkbox"]{width:20px;height:20px;accent-color:#f59e0b;cursor:pointer}
   .acceptance-box label{margin:0;font-weight:600;color:#78350f;cursor:pointer}
+  .acceptance-box input[type="checkbox"]:disabled{cursor:not-allowed;opacity:0.5}
+  .acceptance-box .tooltip{display:none;position:absolute;bottom:100%;left:50%;transform:translateX(-50%);background:#1e293b;color:white;padding:0.5rem 1rem;border-radius:6px;font-size:0.875rem;white-space:nowrap;margin-bottom:0.5rem;font-weight:400}
+  .acceptance-box .tooltip::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:6px solid transparent;border-top-color:#1e293b}
+  .acceptance-box:hover .tooltip{display:block}
   .signature-container{display:flex;flex-direction:column;align-items:center;gap:12px;padding:1.5rem;background:#f8fafc;border-radius:10px;border:2px solid #e2e8f0}
   canvas{border:2px dashed #cbd5e1;border-radius:8px;width:90%;max-width:600px;touch-action:none;display:block;background:white}
   button{font-weight:600;border:none;cursor:pointer;transition:all 0.2s;font-size:1rem;border-radius:8px;font-family:inherit}
@@ -121,6 +125,7 @@ export async function htmlPage (env) {
         <div class="acceptance-box">
           <input id="master" type="checkbox" required>
           <label for="master">I have read and accept all risks</label>
+          <span class="tooltip" id="masterTooltip">Please initial all selected activities first</span>
         </div>
 
         <h3 class="section-title">Signature</h3>
@@ -227,7 +232,7 @@ export async function htmlPage (env) {
     const initialInput = document.createElement('input');
     initialInput.type = 'text';
     initialInput.maxLength = 4;
-    initialInput.placeholder = 'Init';
+    initialInput.placeholder = 'Initials';
     initialInput.className = 'activity-initial';
     initialInput.dataset.slug = a.slug;
     initialInput.oninput = validateMasterCheckbox;
@@ -268,6 +273,7 @@ export async function htmlPage (env) {
   loadActivities();
 
   function validateMasterCheckbox() {
+    const tooltip = document.getElementById('masterTooltip');
     let allFilled = true;
     for (const [slug, {initialInput}] of chosen) {
       if (!initialInput.value.trim()) {
@@ -278,6 +284,9 @@ export async function htmlPage (env) {
     masterCheck.disabled = !allFilled || chosen.size === 0;
     if (masterCheck.disabled) {
       masterCheck.checked = false;
+      tooltip.style.display = 'block';
+    } else {
+      tooltip.style.display = 'none';
     }
   }
 
@@ -350,12 +359,12 @@ export async function htmlPage (env) {
 
       // Create download buttons for each PDF
       json.downloads.forEach(pdf => {
-        html += \`<button onclick="window.open('\${pdf.url}', '_blank')" \`;
+        html += '<button onclick="window.open(&quot;' + pdf.url + '&quot;, &quot;_blank&quot;)" ';
         html += 'style="padding:12px 24px;background:#3b82f6;color:white;border:none;';
         html += 'border-radius:8px;cursor:pointer;font-size:1rem;font-weight:600;';
         html += 'transition:background 0.2s"';
-        html += ' onmouseover="this.style.background=\'#2563eb\'"';
-        html += ' onmouseout="this.style.background=\'#3b82f6\'">';
+        html += ' onmouseover="this.style.background=&quot;#2563eb&quot;"';
+        html += ' onmouseout="this.style.background=&quot;#3b82f6&quot;">';
         html += '📄 Download ' + pdf.filename + '</button>';
       });
 
@@ -365,13 +374,13 @@ export async function htmlPage (env) {
       if (json.downloads.length > 1) {
         html += '<button onclick="';
         json.downloads.forEach(pdf => {
-          html += \`window.open('\${pdf.url}', '_blank');\`;
+          html += 'window.open(&quot;' + pdf.url + '&quot;, &quot;_blank&quot;);';
         });
         html += '" style="padding:14px 28px;background:#10b981;color:white;border:none;';
         html += 'border-radius:8px;cursor:pointer;font-size:1rem;font-weight:600;margin-top:12px;';
         html += 'transition:background 0.2s"';
-        html += ' onmouseover="this.style.background=\'#059669\'"';
-        html += ' onmouseout="this.style.background=\'#10b981\'">';
+        html += ' onmouseover="this.style.background=&quot;#059669&quot;"';
+        html += ' onmouseout="this.style.background=&quot;#10b981&quot;">';
         html += '📦 Download All (' + json.downloads.length + ' PDFs)</button>';
       }
 
@@ -388,8 +397,6 @@ export async function htmlPage (env) {
       // Production mode - email confirmation
       let html = '<h2>✓ Success</h2>';
       html += '<p style="color:#64748b;margin-bottom:1.5rem">Your waivers have been sent to your email</p>';
-      html += '<div style="background:#f8fafc;padding:1.5rem;border-radius:8px;border:1px solid #e2e8f0">';
-      html += '<p style="margin:0;color:#475569"><strong>Attachments:</strong><br>' + json.emailed.join('<br>') + '</p></div>';
       if (json.pin) {
         html += '<div style="margin-top:1.5rem;padding:1rem;background:#fef3c7;border:2px solid #fbbf24;border-radius:8px">';
         html += '<p style="margin:0;color:#78350f;font-weight:600">Archery PIN: <strong>' + json.pin + '</strong></p></div>';

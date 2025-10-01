@@ -280,6 +280,7 @@ export async function handleAdmin() {
       <button class="tab" onclick="showTab('activities')">Manage Activities</button>
       <button class="tab" onclick="showTab('properties')">Manage Properties</button>
       <button class="tab" onclick="showTab('releases')">Legal Releases</button>
+      <button class="tab" onclick="showTab('debug')">Debug</button>
     </div>
 
     <!-- Search Tab -->
@@ -431,6 +432,34 @@ export async function handleAdmin() {
         </div>
       </div>
     </div>
+
+    <!-- Debug Tab -->
+    <div id="debugTab" class="tab-content">
+      <div style="background: #fff3cd; border: 1px solid #ffc107; padding: 15px; border-radius: 4px; margin-bottom: 20px;">
+        <strong>⚠️ Note:</strong> Debug data is cached and auto-updates every 7 days. Click "Refresh Data" to force an update.
+      </div>
+
+      <div style="margin-bottom: 20px;">
+        <button class="btn-primary" onclick="loadDebugData(true)" style="padding: 10px 20px;">
+          🔄 Refresh Data
+        </button>
+        <span id="debugLastUpdate" style="margin-left: 15px; color: #666; font-size: 14px;"></span>
+      </div>
+
+      <div class="section">
+        <h2>KV Store (PROPS_KV)</h2>
+        <div id="kvData" style="background: #f9f9f9; padding: 15px; border-radius: 4px; overflow-x: auto;">
+          <div class="loading">Loading...</div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>D1 Database Tables</h2>
+        <div id="d1Tables" style="margin-top: 15px;">
+          <div class="loading">Loading...</div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -443,7 +472,7 @@ export async function handleAdmin() {
 
       const tabs = document.querySelectorAll('.tab');
       tabs.forEach(tab => {
-        if (tab.textContent.toLowerCase().includes(tabName === 'search' ? 'search' : tabName === 'activities' ? 'activities' : tabName === 'properties' ? 'properties' : 'releases')) {
+        if (tab.textContent.toLowerCase().includes(tabName === 'search' ? 'search' : tabName === 'activities' ? 'activities' : tabName === 'properties' ? 'properties' : tabName === 'releases' ? 'releases' : 'debug')) {
           tab.classList.add('active');
         }
       });
@@ -458,6 +487,9 @@ export async function handleAdmin() {
       }
       if (tabName === 'releases') {
         loadReleases();
+      }
+      if (tabName === 'debug') {
+        loadDebugData();
       }
     }
 
@@ -945,6 +977,96 @@ export async function handleAdmin() {
       const div = document.getElementById('releaseMessage');
       div.innerHTML = \`<div class="\${type === 'error' ? 'error' : 'success'}">\${msg}</div>\`;
       setTimeout(() => div.innerHTML = '', 5000);
+    }
+
+    // Debug functionality
+    async function loadDebugData(forceRefresh = false) {
+      const kvDataDiv = document.getElementById('kvData');
+      const d1TablesDiv = document.getElementById('d1Tables');
+      const lastUpdateSpan = document.getElementById('debugLastUpdate');
+
+      try {
+        kvDataDiv.innerHTML = '<div class="loading">Loading KV data...</div>';
+        d1TablesDiv.innerHTML = '<div class="loading">Loading D1 tables...</div>';
+
+        const response = await fetch('/admin/debug' + (forceRefresh ? '?refresh=true' : ''));
+        const data = await response.json();
+
+        if (!data.ok) {
+          throw new Error(data.error);
+        }
+
+        // Display last update time
+        const lastUpdate = new Date(data.lastUpdate);
+        lastUpdateSpan.textContent = 'Last updated: ' + lastUpdate.toLocaleString();
+
+        // Display KV data
+        let kvHtml = '<h3>All KV Keys</h3>';
+        if (data.kv && Object.keys(data.kv).length > 0) {
+          for (const [key, value] of Object.entries(data.kv)) {
+            kvHtml += '<div style="margin-bottom: 20px; padding: 15px; background: white; border: 1px solid #ddd; border-radius: 4px;">';
+            kvHtml += '<strong style="color: #0070f3; font-family: monospace;">' + escapeHtml(key) + '</strong>';
+            kvHtml += '<pre style="margin: 10px 0 0 0; padding: 10px; background: #f5f5f5; border-radius: 4px; overflow-x: auto; font-size: 12px;">' + escapeHtml(JSON.stringify(value, null, 2)) + '</pre>';
+            kvHtml += '</div>';
+          }
+        } else {
+          kvHtml += '<p style="color: #666;">No KV data found</p>';
+        }
+        kvDataDiv.innerHTML = kvHtml;
+
+        // Display D1 tables
+        let d1Html = '';
+        if (data.d1 && Object.keys(data.d1).length > 0) {
+          for (const [tableName, tableData] of Object.entries(data.d1)) {
+            d1Html += '<div style="margin-bottom: 30px;">';
+            d1Html += '<h3 style="margin-bottom: 10px;">' + escapeHtml(tableName) + ' (' + tableData.count + ' rows)</h3>';
+
+            if (tableData.rows && tableData.rows.length > 0) {
+              d1Html += '<div style="overflow-x: auto;">';
+              d1Html += '<table style="width: 100%; border-collapse: collapse; background: white;">';
+
+              // Table headers
+              d1Html += '<thead><tr>';
+              const columns = Object.keys(tableData.rows[0]);
+              columns.forEach(col => {
+                d1Html += '<th style="padding: 10px; text-align: left; background: #f5f5f5; border: 1px solid #ddd; font-weight: 600;">' + escapeHtml(col) + '</th>';
+              });
+              d1Html += '</tr></thead>';
+
+              // Table rows (limit to first 50 rows)
+              d1Html += '<tbody>';
+              tableData.rows.slice(0, 50).forEach(row => {
+                d1Html += '<tr>';
+                columns.forEach(col => {
+                  let value = row[col];
+                  if (value === null) value = '<em style="color: #999;">null</em>';
+                  else if (typeof value === 'object') value = JSON.stringify(value);
+                  else value = escapeHtml(String(value));
+                  d1Html += '<td style="padding: 10px; border: 1px solid #ddd; font-size: 13px;">' + value + '</td>';
+                });
+                d1Html += '</tr>';
+              });
+              d1Html += '</tbody>';
+              d1Html += '</table>';
+              d1Html += '</div>';
+
+              if (tableData.count > 50) {
+                d1Html += '<p style="margin-top: 10px; color: #666; font-size: 13px;"><em>Showing first 50 of ' + tableData.count + ' rows</em></p>';
+              }
+            } else {
+              d1Html += '<p style="color: #666;">No data in this table</p>';
+            }
+            d1Html += '</div>';
+          }
+        } else {
+          d1Html += '<p style="color: #666;">No D1 tables found</p>';
+        }
+        d1TablesDiv.innerHTML = d1Html;
+
+      } catch (error) {
+        kvDataDiv.innerHTML = '<div class="error">Error loading KV data: ' + escapeHtml(error.message) + '</div>';
+        d1TablesDiv.innerHTML = '<div class="error">Error loading D1 data: ' + escapeHtml(error.message) + '</div>';
+      }
     }
   </script>
 </body>
