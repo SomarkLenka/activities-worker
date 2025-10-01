@@ -231,6 +231,554 @@ Rate limiting is handled at the Cloudflare level. Contact your administrator for
 
 ---
 
-## Additional Admin Endpoints
+---
 
-For a complete list of admin endpoints (properties, activities, risks management), see the admin API documentation or refer to the source code in `src/routes/admin/`.
+## Admin Endpoints
+
+The following endpoints are for administrative purposes and should be protected by authentication (e.g., Cloudflare Access).
+
+### Properties Management
+
+#### GET /admin/properties
+
+**Description:** List all configured properties.
+
+**Response:**
+```json
+{
+  "ok": true,
+  "properties": [
+    {
+      "id": "cabin-13",
+      "name": "Cabin 13"
+    }
+  ]
+}
+```
+
+**Example:**
+```bash
+curl https://activities.rtxsecured.com/admin/properties
+```
+
+---
+
+#### POST /admin/properties/add
+
+**Description:** Add a new property.
+
+**Request Body:**
+```json
+{
+  "id": "cabin-14",
+  "name": "Cabin 14",
+  "copyDefaultActivities": true
+}
+```
+
+**Response:**
+```json
+{
+  "ok": true,
+  "properties": [
+    {
+      "id": "cabin-13",
+      "name": "Cabin 13"
+    },
+    {
+      "id": "cabin-14",
+      "name": "Cabin 14"
+    }
+  ],
+  "added": "cabin-14"
+}
+```
+
+**Example:**
+```bash
+curl -X POST https://activities.rtxsecured.com/admin/properties/add \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "cabin-14",
+    "name": "Cabin 14",
+    "copyDefaultActivities": true
+  }'
+```
+
+---
+
+#### POST /admin/properties/remove
+
+**Description:** Remove a property (cannot remove if it's the last property).
+
+**Request Body:**
+```json
+{
+  "id": "cabin-14"
+}
+```
+
+**Response:**
+```json
+{
+  "ok": true,
+  "properties": [
+    {
+      "id": "cabin-13",
+      "name": "Cabin 13"
+    }
+  ],
+  "removed": "cabin-14"
+}
+```
+
+**Example:**
+```bash
+curl -X POST https://activities.rtxsecured.com/admin/properties/remove \
+  -H "Content-Type: application/json" \
+  -d '{"id": "cabin-14"}'
+```
+
+---
+
+### Activities Management
+
+#### GET /admin/activities
+
+**Description:** Get all activities for a specific property.
+
+**Query Parameters:**
+- `property` (optional): Property ID (defaults to "cabin-12")
+
+**Response:**
+```json
+{
+  "ok": true,
+  "propertyId": "cabin-13",
+  "activities": [
+    {
+      "slug": "kayaking",
+      "label": "Kayaking",
+      "risk": "low"
+    },
+    {
+      "slug": "ziplining",
+      "label": "Ziplining",
+      "risk": "medium"
+    }
+  ]
+}
+```
+
+**Example:**
+```bash
+curl "https://activities.rtxsecured.com/admin/activities?property=cabin-13"
+```
+
+---
+
+#### POST /admin/activities/add
+
+**Description:** Add a new activity to a property.
+
+**Query Parameters:**
+- `property` (optional): Property ID (defaults to "cabin-12")
+
+**Request Body:**
+```json
+{
+  "slug": "rock-climbing",
+  "label": "Rock Climbing",
+  "risk": "high"
+}
+```
+
+**Response:**
+```json
+{
+  "ok": true,
+  "propertyId": "cabin-13",
+  "activities": [...],
+  "added": "rock-climbing"
+}
+```
+
+**Example:**
+```bash
+curl -X POST "https://activities.rtxsecured.com/admin/activities/add?property=cabin-13" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "slug": "rock-climbing",
+    "label": "Rock Climbing",
+    "risk": "high"
+  }'
+```
+
+---
+
+#### POST /admin/activities/update
+
+**Description:** Update an existing activity's label or risk level.
+
+**Query Parameters:**
+- `property` (optional): Property ID (defaults to "cabin-12")
+
+**Request Body:**
+```json
+{
+  "slug": "kayaking",
+  "label": "Advanced Kayaking",
+  "risk": "medium"
+}
+```
+
+**Response:**
+```json
+{
+  "ok": true,
+  "propertyId": "cabin-13",
+  "activities": [...],
+  "updated": "kayaking"
+}
+```
+
+**Example:**
+```bash
+curl -X POST "https://activities.rtxsecured.com/admin/activities/update?property=cabin-13" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "slug": "kayaking",
+    "risk": "medium"
+  }'
+```
+
+---
+
+#### POST /admin/activities/remove
+
+**Description:** Remove an activity from a property.
+
+**Query Parameters:**
+- `property` (optional): Property ID (defaults to "cabin-12")
+
+**Request Body:**
+```json
+{
+  "slug": "rock-climbing"
+}
+```
+
+**Response:**
+```json
+{
+  "ok": true,
+  "propertyId": "cabin-13",
+  "activities": [...],
+  "removed": "rock-climbing"
+}
+```
+
+**Example:**
+```bash
+curl -X POST "https://activities.rtxsecured.com/admin/activities/remove?property=cabin-13" \
+  -H "Content-Type: application/json" \
+  -d '{"slug": "rock-climbing"}'
+```
+
+---
+
+#### POST /admin/activities
+
+**Description:** Replace all activities for a property.
+
+**Query Parameters:**
+- `property` (optional): Property ID (defaults to "cabin-12")
+
+**Request Body:**
+```json
+{
+  "activities": [
+    {
+      "slug": "kayaking",
+      "label": "Kayaking",
+      "risk": "low"
+    },
+    {
+      "slug": "ziplining",
+      "label": "Ziplining",
+      "risk": "medium"
+    }
+  ]
+}
+```
+
+**Response:**
+```json
+{
+  "ok": true,
+  "propertyId": "cabin-13",
+  "activities": [...]
+}
+```
+
+**Example:**
+```bash
+curl -X POST "https://activities.rtxsecured.com/admin/activities?property=cabin-13" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "activities": [
+      {"slug": "kayaking", "label": "Kayaking", "risk": "low"}
+    ]
+  }'
+```
+
+---
+
+### Risk Levels Management
+
+#### GET /admin/risks
+
+**Description:** Get all risk level definitions.
+
+**Response:**
+```json
+{
+  "ok": true,
+  "risks": {
+    "low": {
+      "level": "low",
+      "title": "Low Risk",
+      "description": "Suitable for all ages and fitness levels. Basic safety equipment provided."
+    },
+    "medium": {
+      "level": "medium",
+      "title": "Medium Risk",
+      "description": "Moderate physical activity. Some experience recommended."
+    },
+    "high": {
+      "level": "high",
+      "title": "High Risk",
+      "description": "Advanced activity. Significant physical demands and safety risks."
+    }
+  }
+}
+```
+
+**Example:**
+```bash
+curl https://activities.rtxsecured.com/admin/risks
+```
+
+---
+
+#### GET /admin/risks?level={level}
+
+**Description:** Get a specific risk level definition.
+
+**Query Parameters:**
+- `level` (required): Risk level (low, medium, or high)
+
+**Response:**
+```json
+{
+  "ok": true,
+  "risk": {
+    "level": "low",
+    "title": "Low Risk",
+    "description": "Suitable for all ages and fitness levels."
+  }
+}
+```
+
+**Example:**
+```bash
+curl "https://activities.rtxsecured.com/admin/risks?level=low"
+```
+
+---
+
+#### POST /admin/risks
+
+**Description:** Update a risk level definition.
+
+**Request Body:**
+```json
+{
+  "level": "low",
+  "title": "Low Risk",
+  "description": "Suitable for all ages and fitness levels. Basic safety equipment provided."
+}
+```
+
+**Response:**
+```json
+{
+  "ok": true,
+  "risk": {
+    "level": "low",
+    "title": "Low Risk",
+    "description": "Suitable for all ages and fitness levels. Basic safety equipment provided."
+  }
+}
+```
+
+**Example:**
+```bash
+curl -X POST https://activities.rtxsecured.com/admin/risks \
+  -H "Content-Type: application/json" \
+  -d '{
+    "level": "low",
+    "title": "Low Risk",
+    "description": "Updated description here"
+  }'
+```
+
+---
+
+### Document Management
+
+#### GET /admin/document
+
+**Description:** Get document metadata by submission ID and activity.
+
+**Query Parameters:**
+- `submission` (required): Submission ID
+- `activity` (required): Activity slug
+
+**Response:**
+```json
+{
+  "ok": true,
+  "document_id": 84,
+  "r2_key": "waivers/cabin-13_kayaking_20251015_abc123.pdf"
+}
+```
+
+**Example:**
+```bash
+curl "https://activities.rtxsecured.com/admin/document?submission=42&activity=kayaking"
+```
+
+---
+
+#### GET /admin/download-all
+
+**Description:** Download all waiver PDFs for a submission as a ZIP file.
+
+**Query Parameters:**
+- `submission` (required): Submission ID
+
+**Response:** Binary ZIP file
+
+**Example:**
+```bash
+curl "https://activities.rtxsecured.com/admin/download-all?submission=42" -o waivers.zip
+```
+
+---
+
+### Release Management
+
+#### GET /admin/releases
+
+**Description:** Get all waiver text releases (versioned legal text).
+
+**Response:**
+```json
+{
+  "ok": true,
+  "current": {
+    "version": "1.0.2",
+    "release_date": "2025-10-01",
+    "waiver_text": "By signing this waiver...",
+    "created_at": "2025-10-01T10:00:00.000Z"
+  },
+  "releases": [
+    {
+      "version": "1.0.2",
+      "release_date": "2025-10-01",
+      "waiver_text": "By signing this waiver...",
+      "created_at": "2025-10-01T10:00:00.000Z"
+    },
+    {
+      "version": "1.0.1",
+      "release_date": "2025-09-15",
+      "waiver_text": "Previous version...",
+      "created_at": "2025-09-15T14:00:00.000Z"
+    }
+  ]
+}
+```
+
+**Example:**
+```bash
+curl https://activities.rtxsecured.com/admin/releases
+```
+
+---
+
+#### POST /admin/releases/create
+
+**Description:** Create a new waiver text release. Version is auto-incremented if not provided.
+
+**Request Body:**
+```json
+{
+  "version": "1.0.3",
+  "waiver_text": "Updated legal waiver text here..."
+}
+```
+
+**Notes:**
+- If `version` is omitted, it will auto-increment from the latest version
+- Version must follow semantic versioning format: X.Y.Z
+- Version must be unique
+
+**Response:**
+```json
+{
+  "ok": true,
+  "version": "1.0.3",
+  "release_date": "2025-10-01"
+}
+```
+
+**Example:**
+```bash
+curl -X POST https://activities.rtxsecured.com/admin/releases/create \
+  -H "Content-Type: application/json" \
+  -d '{
+    "waiver_text": "Updated legal text..."
+  }'
+```
+
+---
+
+### Document Verification
+
+#### GET /admin/verify
+
+**Description:** Verify document integrity by comparing stored hash with computed hash.
+
+**Query Parameters:**
+- `document` (required): Document ID
+
+**Response:**
+```json
+{
+  "ok": true,
+  "verified": true,
+  "stored_hash": "abc123def456...",
+  "computed_hash": "abc123def456..."
+}
+```
+
+**Notes:**
+- Documents are hashed using SHA-256
+- Hash includes: submission data, activity, initials, signature, and release version
+- Used to verify documents haven't been tampered with
+
+**Example:**
+```bash
+curl "https://activities.rtxsecured.com/admin/verify?document=84"
+```

@@ -382,9 +382,9 @@ export async function handleAdmin() {
             <input type="text" id="propName" required placeholder="Cabin 12">
           </div>
           <div class="form-group">
-            <label>
-              <input type="checkbox" id="copyDefaultActivities" checked>
-              Copy default activities template
+            <label for="copyDefaultActivities" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+              <input type="checkbox" id="copyDefaultActivities" checked style="cursor: pointer;">
+              <span>Copy default activities template</span>
             </label>
           </div>
           <button type="submit" class="btn-primary">Add Property</button>

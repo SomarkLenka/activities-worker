@@ -4,3 +4,4 @@ dist/
 .dev.vars
 email-worker/
 browser-worker/
+generate_test_data.js
