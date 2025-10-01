@@ -1,4 +1,4 @@
-import { json } from '../resp.js';
+import { json } from '../utils/resp.js';
 
 export async function handleStatus(env) {
   try {
