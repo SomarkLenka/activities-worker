@@ -63,7 +63,7 @@ export async function htmlPage (env) {
   .risk-high{background:#ef4444}
   .risk-details{position:absolute;right:0;width:190px;opacity:0;font-size:9px;line-height:1.3;color:#334155;transition:opacity 0.3s ease;padding:4px 8px 4px 108px;display:block;box-sizing:border-box;max-height:56px;overflow-y:auto;background:white;border-radius:6px;box-shadow:0 2px 8px rgba(0,0,0,0.1)}
   .risk-chip-wrapper:hover .risk-details{opacity:1}
-  .activity-initial{width:50px;height:50px;text-align:center;padding:0;border:2px solid #cbd5e1;border-radius:8px;visibility:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;background:white;transition:all 0.2s}
+  .activity-initial{width:70px;height:50px;text-align:center;padding:0;border:2px solid #cbd5e1;border-radius:8px;visibility:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;background:white;transition:all 0.2s}
   .activity-initial.visible{visibility:visible;border-color:#3b82f6}
   .activity-initial:focus{outline:none;border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,0.1)}
   .acceptance-box{background:#fef3c7;border:2px solid #fbbf24;border-radius:10px;padding:1rem;margin:1.5rem 0;display:flex;align-items:center;gap:0.75rem;position:relative}
@@ -273,7 +273,6 @@ export async function htmlPage (env) {
   loadActivities();
 
   function validateMasterCheckbox() {
-    const tooltip = document.getElementById('masterTooltip');
     let allFilled = true;
     for (const [slug, {initialInput}] of chosen) {
       if (!initialInput.value.trim()) {
@@ -284,9 +283,6 @@ export async function htmlPage (env) {
     masterCheck.disabled = !allFilled || chosen.size === 0;
     if (masterCheck.disabled) {
       masterCheck.checked = false;
-      tooltip.style.display = 'block';
-    } else {
-      tooltip.style.display = 'none';
     }
   }
 
