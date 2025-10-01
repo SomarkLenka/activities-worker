@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid';
-import { json, bad } from '../utils/resp.js';
+import { json, bad } from '../utils/admin.js';
 import { validateSubmission } from '../services/validation.js';
 import { saveSubmission, saveDocuments } from '../services/storage.js';
 import { makePDFs } from '../services/pdf.js';
@@ -18,8 +18,10 @@ export async function handleSubmit(request, env) {
 
   /* ---- write submission ----------------------------------------------- */
   const subId = nanoid(10);
+  const createdAt = new Date().toISOString();
+
   try {
-    await saveSubmission(env, subId, data);
+    await saveSubmission(env, subId, data, createdAt);
     console.log('Submission saved to database');
   } catch (dbError) {
     console.error('Database error:', dbError);

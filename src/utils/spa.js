@@ -35,67 +35,106 @@ export async function htmlPage (env) {
 <title>Activity Waiver</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
-  body{font-family:system-ui;margin:2rem auto;max-width:1000px;padding:0 1rem}
-  label{display:block;margin:.4rem 0}
-  .signature-container{display:flex;flex-direction:column;align-items:center;gap:10px}
-  canvas{border:1px solid #999;width:75%;touch-action:none;display:block}
-  .activities-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;column-gap:24px;padding:10px;background:#f5f5f5;border-radius:8px;overflow:hidden}
+  *{box-sizing:border-box}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;margin:0;padding:2rem 1rem;background:#f8fafc;color:#1e293b;line-height:1.6}
+  .container{max-width:900px;margin:0 auto;background:white;border-radius:16px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1),0 2px 4px -1px rgba(0,0,0,0.06);overflow:hidden}
+  .header{background:linear-gradient(135deg,#3b82f6 0%,#1d4ed8 100%);padding:2.5rem 2rem;color:white;text-align:center}
+  .header h1{margin:0 0 0.5rem 0;font-size:2rem;font-weight:700}
+  .header p{margin:0;opacity:0.9;font-size:1rem}
+  .content{padding:2rem}
+  .form-group{margin-bottom:1.5rem}
+  .form-group label{display:block;margin-bottom:0.5rem;font-weight:600;font-size:0.875rem;color:#475569}
+  .form-group input,.form-group select{width:100%;padding:0.75rem 1rem;border:1px solid #cbd5e1;border-radius:8px;font-size:1rem;transition:all 0.2s}
+  .form-group input:focus,.form-group select:focus{outline:none;border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,0.1)}
+  .section-title{font-size:1.25rem;font-weight:700;color:#0f172a;margin:2rem 0 1rem 0;padding-bottom:0.5rem;border-bottom:2px solid #e2e8f0}
+  .activities-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;column-gap:24px;padding:0;overflow:hidden}
   .activity-row{display:flex;gap:8px;align-items:center}
-  .activity-item{display:flex;align-items:center;padding:8px;background:white;border-radius:4px;border:1px solid #ddd;cursor:pointer;transition:all 0.2s;flex:1;position:relative;min-height:64px;overflow:hidden}
-  .activity-item:hover{background:#f0f7ff;border-color:#0070f3}
-  .activity-item input[type="checkbox"]{margin-right:8px;cursor:pointer;width:18px;height:18px;flex-shrink:0}
+  .activity-item{display:flex;align-items:center;padding:12px;background:#f8fafc;border-radius:10px;border:2px solid #e2e8f0;cursor:pointer;transition:all 0.2s;flex:1;position:relative;min-height:68px;overflow:hidden}
+  .activity-item:hover{background:#f1f5f9;border-color:#3b82f6}
+  .activity-item.checked{background:#eff6ff;border-color:#3b82f6}
+  .activity-item input[type="checkbox"]{margin-right:10px;cursor:pointer;width:20px;height:20px;flex-shrink:0;accent-color:#3b82f6}
   .activity-item label{margin:0;cursor:pointer;flex:1;display:flex;align-items:center;gap:8px;position:relative;z-index:1;justify-content:space-between}
-  .activity-label-text{white-space:nowrap;flex-shrink:0;min-width:120px}
+  .activity-label-text{white-space:nowrap;flex-shrink:0;min-width:120px;font-weight:600;color:#1e293b}
   .risk-chip-wrapper{display:flex;align-items:center;justify-content:flex-end;min-width:200px;width:200px;transition:all 0.3s ease;position:relative;overflow:visible;z-index:10}
-  .risk-chip{padding:6px 12px;border-radius:12px;color:white;font-size:11px;font-weight:500;white-space:nowrap;display:inline-block;width:100px;text-align:center;transition:transform 0.3s ease;box-sizing:border-box;flex-shrink:0;position:relative;z-index:2}
+  .risk-chip{padding:6px 14px;border-radius:12px;color:white;font-size:11px;font-weight:600;white-space:nowrap;display:inline-block;width:100px;text-align:center;transition:transform 0.3s ease;box-sizing:border-box;flex-shrink:0;position:relative;z-index:2}
   .risk-chip-wrapper:hover .risk-chip{transform:translateX(-110px)}
-  .risk-low{background:#16a34a}
-  .risk-medium{background:#f97316}
-  .risk-high{background:#dc2626}
-  .risk-details{position:absolute;right:0;width:190px;opacity:0;font-size:9px;line-height:1.2;color:#333;transition:opacity 0.3s ease;padding-left:108px;display:block;box-sizing:border-box;max-height:56px;overflow-y:auto}
+  .risk-low{background:#10b981}
+  .risk-medium{background:#f59e0b}
+  .risk-high{background:#ef4444}
+  .risk-details{position:absolute;right:0;width:190px;opacity:0;font-size:9px;line-height:1.3;color:#334155;transition:opacity 0.3s ease;padding:4px 8px 4px 108px;display:block;box-sizing:border-box;max-height:56px;overflow-y:auto;background:white;border-radius:6px;box-shadow:0 2px 8px rgba(0,0,0,0.1)}
   .risk-chip-wrapper:hover .risk-details{opacity:1}
-  .activity-initial{width:45px;height:45px;text-align:center;padding:0;border:1px solid #ccc;border-radius:4px;visibility:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:14px}
-  .activity-initial.visible{visibility:visible}
-  @media (max-width:480px){.activities-grid{grid-template-columns:1fr}}
+  .activity-initial{width:50px;height:50px;text-align:center;padding:0;border:2px solid #cbd5e1;border-radius:8px;visibility:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;background:white;transition:all 0.2s}
+  .activity-initial.visible{visibility:visible;border-color:#3b82f6}
+  .activity-initial:focus{outline:none;border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,0.1)}
+  .acceptance-box{background:#fef3c7;border:2px solid #fbbf24;border-radius:10px;padding:1rem;margin:1.5rem 0;display:flex;align-items:center;gap:0.75rem}
+  .acceptance-box input[type="checkbox"]{width:20px;height:20px;accent-color:#f59e0b;cursor:pointer}
+  .acceptance-box label{margin:0;font-weight:600;color:#78350f;cursor:pointer}
+  .signature-container{display:flex;flex-direction:column;align-items:center;gap:12px;padding:1.5rem;background:#f8fafc;border-radius:10px;border:2px solid #e2e8f0}
+  canvas{border:2px dashed #cbd5e1;border-radius:8px;width:90%;max-width:600px;touch-action:none;display:block;background:white}
+  button{font-weight:600;border:none;cursor:pointer;transition:all 0.2s;font-size:1rem;border-radius:8px;font-family:inherit}
+  #clearSig{padding:0.625rem 1.5rem;background:#64748b;color:white}
+  #clearSig:hover{background:#475569}
+  #submit{width:100%;padding:1rem;background:#3b82f6;color:white;font-size:1.125rem;margin-top:1.5rem}
+  #submit:hover:not(:disabled){background:#2563eb}
+  #submit:disabled{opacity:0.5;cursor:not-allowed}
+  .thanks{padding:2rem;text-align:center}
+  .thanks h2{color:#3b82f6;font-size:1.75rem;margin-bottom:1rem}
+  @media (max-width:768px){
+    .content{padding:1.5rem}
+    .activities-grid{grid-template-columns:1fr}
+    canvas{width:100%}
+  }
 </style>
 
 <body>
-  <h1>Sign your waiver</h1>
-  <form id="form">
-    <label>Property
-      <select id="prop"></select>
-    </label>
-
-    <label>Check-in
-      <input type="date" id="date" required>
-    </label>
-
-    <label>Name
-      <input id="name" required>
-    </label>
-
-    <label>E-mail
-      <input id="email" type="email" required>
-    </label>
-
-    <h3>Activities</h3>
-    <div id="activities" class="activities-grid"></div>
-
-    <label>
-      <input id="master" type="checkbox" required>
-      I have read and accept all risks.
-    </label>
-
-    <h3>Signature</h3>
-    <div class="signature-container">
-      <canvas id="sign" width="600" height="200"></canvas>
-      <button id="clearSig" type="button">Clear</button>
+  <div class="container">
+    <div class="header">
+      <h1>Activity Waiver</h1>
+      <p>Complete your waiver to get started</p>
     </div>
 
-    <button id="submit">Submit</button>
-  </form>
+    <div class="content">
+      <form id="form">
+        <div class="form-group">
+          <label>Property</label>
+          <select id="prop"></select>
+        </div>
 
-  <div id="thanks" hidden></div>
+        <div class="form-group">
+          <label>Check-in Date</label>
+          <input type="date" id="date" required>
+        </div>
+
+        <div class="form-group">
+          <label>Full Name</label>
+          <input id="name" required>
+        </div>
+
+        <div class="form-group">
+          <label>Email Address</label>
+          <input id="email" type="email" required>
+        </div>
+
+        <h3 class="section-title">Select Activities</h3>
+        <div id="activities" class="activities-grid"></div>
+
+        <div class="acceptance-box">
+          <input id="master" type="checkbox" required>
+          <label for="master">I have read and accept all risks</label>
+        </div>
+
+        <h3 class="section-title">Signature</h3>
+        <div class="signature-container">
+          <canvas id="sign" width="600" height="200"></canvas>
+          <button id="clearSig" type="button">Clear</button>
+        </div>
+
+        <button id="submit">Submit Waiver</button>
+      </form>
+
+      <div id="thanks" class="thanks" hidden></div>
+    </div>
+  </div>
 
 <script type="module">
   /* ---------- bootstrap property list and risks -------------------- */
@@ -111,7 +150,17 @@ export async function htmlPage (env) {
   console.log("Props after array check:", props);
 
   const propSel = document.getElementById('prop');
-  props.forEach(p => propSel.add(new Option(p.name, p.id)));
+
+  if (!props || props.length === 0) {
+    console.error('No properties found! Props data:', props);
+    propSel.add(new Option('No properties available', ''));
+    propSel.disabled = true;
+  } else {
+    props.forEach(p => {
+      console.log('Adding property option:', p.name, p.id);
+      propSel.add(new Option(p.name, p.id));
+    });
+  }
 
   /* ---------- activity checkboxes ------------------------- */
   const actsDiv      = document.getElementById('activities');
@@ -187,10 +236,12 @@ export async function htmlPage (env) {
       if (checkbox.checked) {
         chosen.set(a.slug, {itemDiv, initialInput});
         initialInput.classList.add('visible');
+        itemDiv.classList.add('checked');
       } else {
         chosen.delete(a.slug);
         initialInput.classList.remove('visible');
         initialInput.value = '';
+        itemDiv.classList.remove('checked');
       }
       validateMasterCheckbox();
     };
@@ -293,15 +344,18 @@ export async function htmlPage (env) {
 
     if (json.devMode) {
       // Development mode - show download links
-      let html = '<h2>Waivers Generated ✔</h2>';
-      html += '<p>Download your waivers:</p>';
-      html += '<div style="display:flex;flex-direction:column;gap:10px;margin:20px 0">';
+      let html = '<h2>✓ Waivers Generated</h2>';
+      html += '<p style="color:#64748b;margin-bottom:1.5rem">Your waivers are ready to download</p>';
+      html += '<div style="display:flex;flex-direction:column;gap:12px">';
 
       // Create download buttons for each PDF
       json.downloads.forEach(pdf => {
         html += \`<button onclick="window.open('\${pdf.url}', '_blank')" \`;
-        html += 'style="padding:10px 20px;background:#0070f3;color:#fff;border:none;';
-        html += 'border-radius:6px;cursor:pointer;font-size:16px">';
+        html += 'style="padding:12px 24px;background:#3b82f6;color:white;border:none;';
+        html += 'border-radius:8px;cursor:pointer;font-size:1rem;font-weight:600;';
+        html += 'transition:background 0.2s"';
+        html += ' onmouseover="this.style.background=\'#2563eb\'"';
+        html += ' onmouseout="this.style.background=\'#3b82f6\'">';
         html += '📄 Download ' + pdf.filename + '</button>';
       });
 
@@ -313,25 +367,34 @@ export async function htmlPage (env) {
         json.downloads.forEach(pdf => {
           html += \`window.open('\${pdf.url}', '_blank');\`;
         });
-        html += '" style="padding:12px 24px;background:#28a745;color:#fff;border:none;';
-        html += 'border-radius:6px;cursor:pointer;font-size:16px;margin-top:10px">';
+        html += '" style="padding:14px 28px;background:#10b981;color:white;border:none;';
+        html += 'border-radius:8px;cursor:pointer;font-size:1rem;font-weight:600;margin-top:12px;';
+        html += 'transition:background 0.2s"';
+        html += ' onmouseover="this.style.background=\'#059669\'"';
+        html += ' onmouseout="this.style.background=\'#10b981\'">';
         html += '📦 Download All (' + json.downloads.length + ' PDFs)</button>';
       }
 
       if (json.pin) {
-        html += '<p style="margin-top:20px">Your Archery PIN is <b>' + json.pin + '</b></p>';
+        html += '<div style="margin-top:1.5rem;padding:1rem;background:#fef3c7;border:2px solid #fbbf24;border-radius:8px">';
+        html += '<p style="margin:0;color:#78350f;font-weight:600">Archery PIN: <strong>' + json.pin + '</strong></p></div>';
       }
 
-      html += '<p style="margin-top:20px;color:#666;font-size:14px">';
-      html += '⚠️ Development Mode - PDFs are stored but not emailed</p>';
+      html += '<p style="margin-top:1.5rem;color:#94a3b8;font-size:0.875rem">';
+      html += '⚠️ Development Mode - PDFs stored locally, not emailed</p>';
 
       document.getElementById('thanks').innerHTML = html;
     } else {
       // Production mode - email confirmation
-      document.getElementById('thanks').innerHTML =
-        '<h2>Email sent ✔</h2><p>Attachments:<br>' +
-        json.emailed.join('<br>') + '</p>' +
-        (json.pin ? '<p>Your Archery PIN is <b>' + json.pin + '</b></p>' : '');
+      let html = '<h2>✓ Success</h2>';
+      html += '<p style="color:#64748b;margin-bottom:1.5rem">Your waivers have been sent to your email</p>';
+      html += '<div style="background:#f8fafc;padding:1.5rem;border-radius:8px;border:1px solid #e2e8f0">';
+      html += '<p style="margin:0;color:#475569"><strong>Attachments:</strong><br>' + json.emailed.join('<br>') + '</p></div>';
+      if (json.pin) {
+        html += '<div style="margin-top:1.5rem;padding:1rem;background:#fef3c7;border:2px solid #fbbf24;border-radius:8px">';
+        html += '<p style="margin:0;color:#78350f;font-weight:600">Archery PIN: <strong>' + json.pin + '</strong></p></div>';
+      }
+      document.getElementById('thanks').innerHTML = html;
     }
     } catch (error) {
       console.error("Form submission error:", error);

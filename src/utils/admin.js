@@ -1,3 +1,11 @@
+export const json = (obj, status = 200) =>
+  new Response(JSON.stringify(obj), {
+    status,
+    headers: { 'content-type': 'application/json' }
+  });
+
+export const bad = msg => json({ ok: false, error: msg }, 400);
+
 export async function handleAdmin() {
   const html = `<!doctype html>
 <html lang="en">
@@ -24,6 +32,35 @@ export async function handleAdmin() {
       margin-top: 0;
       color: #333;
     }
+    .tabs {
+      display: flex;
+      border-bottom: 2px solid #ddd;
+      margin-bottom: 30px;
+    }
+    .tab {
+      padding: 12px 24px;
+      cursor: pointer;
+      border: none;
+      background: none;
+      font-size: 16px;
+      font-weight: 600;
+      color: #666;
+      border-bottom: 3px solid transparent;
+      transition: all 0.2s;
+    }
+    .tab:hover {
+      color: #0070f3;
+    }
+    .tab.active {
+      color: #0070f3;
+      border-bottom-color: #0070f3;
+    }
+    .tab-content {
+      display: none;
+    }
+    .tab-content.active {
+      display: block;
+    }
     .search-form {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -43,13 +80,16 @@ export async function handleAdmin() {
       color: #555;
       font-size: 14px;
     }
-    input {
+    input, select {
       padding: 10px;
       border: 1px solid #ddd;
       border-radius: 4px;
       font-size: 14px;
+      width: 100%;
+      max-width: 400px;
+      box-sizing: border-box;
     }
-    input:focus {
+    input:focus, select:focus {
       outline: none;
       border-color: #0070f3;
     }
@@ -67,11 +107,11 @@ export async function handleAdmin() {
       cursor: pointer;
       transition: all 0.2s;
     }
-    .btn-search {
+    .btn-search, .btn-primary {
       background: #0070f3;
       color: white;
     }
-    .btn-search:hover {
+    .btn-search:hover, .btn-primary:hover {
       background: #0051cc;
     }
     .btn-clear {
@@ -80,6 +120,26 @@ export async function handleAdmin() {
     }
     .btn-clear:hover {
       background: #ddd;
+    }
+    .btn-danger {
+      background: #dc3545;
+      color: white;
+      padding: 8px 15px;
+      font-size: 13px;
+      margin-left: 5px;
+    }
+    .btn-danger:hover {
+      background: #c82333;
+    }
+    .btn-warning {
+      background: #ffc107;
+      color: #000;
+      padding: 8px 15px;
+      font-size: 13px;
+      margin-left: 5px;
+    }
+    .btn-warning:hover {
+      background: #e0a800;
     }
     .results {
       margin-top: 20px;
@@ -119,6 +179,12 @@ export async function handleAdmin() {
       color: #1976d2;
       border-radius: 4px;
       font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .activity-badge:hover {
+      background: #1976d2;
+      color: white;
     }
     .loading {
       text-align: center;
@@ -132,10 +198,76 @@ export async function handleAdmin() {
       border-radius: 4px;
       margin: 20px 0;
     }
+    .message {
+      padding: 15px;
+      border-radius: 4px;
+      margin-bottom: 20px;
+    }
+    .success {
+      background: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+    }
     .empty {
       text-align: center;
       padding: 40px;
       color: #999;
+    }
+    .section {
+      margin-bottom: 40px;
+      padding: 20px;
+      background: #f9f9f9;
+      border-radius: 8px;
+    }
+    h2 {
+      margin-top: 0;
+      font-size: 20px;
+      color: #555;
+    }
+    .activities-list {
+      margin-top: 20px;
+    }
+    .activity-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 15px;
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      margin-bottom: 10px;
+    }
+    .activity-info {
+      flex: 1;
+    }
+    .activity-slug {
+      font-weight: 600;
+      color: #333;
+      font-size: 16px;
+    }
+    .activity-label {
+      color: #666;
+      margin: 5px 0;
+    }
+    .risk-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-top: 5px;
+    }
+    .risk-low {
+      background: #d4edda;
+      color: #155724;
+    }
+    .risk-medium {
+      background: #fff3cd;
+      color: #856404;
+    }
+    .risk-high {
+      background: #f8d7da;
+      color: #721c24;
     }
   </style>
 </head>
@@ -143,46 +275,216 @@ export async function handleAdmin() {
   <div class="container">
     <h1>Activity Waivers Admin</h1>
 
-    <form class="search-form" id="searchForm">
-      <div class="form-group">
-        <label for="name">Guest Name</label>
-        <input type="text" id="name" name="name" placeholder="John Doe">
+    <div class="tabs">
+      <button class="tab active" onclick="showTab('search')">Search Submissions</button>
+      <button class="tab" onclick="showTab('activities')">Manage Activities</button>
+      <button class="tab" onclick="showTab('properties')">Manage Properties</button>
+      <button class="tab" onclick="showTab('releases')">Legal Releases</button>
+    </div>
+
+    <!-- Search Tab -->
+    <div id="searchTab" class="tab-content active">
+      <form class="search-form" id="searchForm">
+        <div class="form-group">
+          <label for="name">Guest Name</label>
+          <input type="text" id="name" name="name" placeholder="John Doe">
+        </div>
+
+        <div class="form-group">
+          <label for="email">Email</label>
+          <input type="email" id="email" name="email" placeholder="guest@example.com">
+        </div>
+
+        <div class="form-group">
+          <label for="prop">Property ID</label>
+          <input type="text" id="prop" name="prop" placeholder="cabin-12">
+        </div>
+
+        <div class="form-group">
+          <label for="date">Check-in Date</label>
+          <input type="date" id="date" name="date">
+        </div>
+
+        <div class="form-group">
+          <label for="activity">Activity</label>
+          <input type="text" id="activity" name="activity" placeholder="archery">
+        </div>
+
+        <div class="button-group">
+          <button type="submit" class="btn-search">Search</button>
+          <button type="button" class="btn-clear" onclick="clearForm()">Clear</button>
+        </div>
+      </form>
+
+      <div class="results" id="results"></div>
+    </div>
+
+    <!-- Activities Tab -->
+    <div id="activitiesTab" class="tab-content">
+      <div id="message"></div>
+
+      <div class="section">
+        <h2>Property</h2>
+        <div class="form-group">
+          <label for="propertySelect">Select Property</label>
+          <select id="propertySelect" onchange="loadActivities()">
+            <option value="">Loading...</option>
+          </select>
+        </div>
       </div>
 
-      <div class="form-group">
-        <label for="email">Email</label>
-        <input type="email" id="email" name="email" placeholder="guest@example.com">
+      <div class="section">
+        <h2>Add New Activity</h2>
+        <form id="addForm">
+          <div class="form-group">
+            <label for="addSlug">Slug (e.g., rock-climbing)</label>
+            <input type="text" id="addSlug" required placeholder="rock-climbing">
+          </div>
+          <div class="form-group">
+            <label for="addLabel">Label (Display Name)</label>
+            <input type="text" id="addLabel" required placeholder="Rock Climbing">
+          </div>
+          <div class="form-group">
+            <label for="addRisk">Risk Level</label>
+            <select id="addRisk" required>
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+            </select>
+          </div>
+          <button type="submit" class="btn-primary">Add Activity</button>
+        </form>
       </div>
 
-      <div class="form-group">
-        <label for="prop">Property ID</label>
-        <input type="text" id="prop" name="prop" placeholder="cabin-12">
+      <div class="section">
+        <h2>Current Activities</h2>
+        <div id="activitiesList" class="activities-list">
+          <div class="loading">Loading...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Properties Tab -->
+    <div id="propertiesTab" class="tab-content">
+      <div id="propMessage"></div>
+
+      <div class="section">
+        <h2>Add New Property</h2>
+        <form id="addPropertyForm">
+          <div class="form-group">
+            <label for="propId">Property ID (e.g., cabin-12)</label>
+            <input type="text" id="propId" required placeholder="cabin-12">
+          </div>
+          <div class="form-group">
+            <label for="propName">Property Name</label>
+            <input type="text" id="propName" required placeholder="Cabin 12">
+          </div>
+          <div class="form-group">
+            <label>
+              <input type="checkbox" id="copyDefaultActivities" checked>
+              Copy default activities template
+            </label>
+          </div>
+          <button type="submit" class="btn-primary">Add Property</button>
+        </form>
       </div>
 
-      <div class="form-group">
-        <label for="date">Check-in Date</label>
-        <input type="date" id="date" name="date">
+      <div class="section">
+        <h2>Current Properties</h2>
+        <div id="propertiesList" class="activities-list">
+          <div class="loading">Loading...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Legal Releases Tab -->
+    <div id="releasesTab" class="tab-content">
+      <div id="releaseMessage"></div>
+
+      <div class="section">
+        <h2>Current Release</h2>
+        <div id="currentRelease" class="current-release">
+          <div class="loading">Loading...</div>
+        </div>
       </div>
 
-      <div class="form-group">
-        <label for="activity">Activity</label>
-        <input type="text" id="activity" name="activity" placeholder="archery">
+      <div class="section">
+        <h2>Create New Release</h2>
+        <form id="releaseForm">
+          <div class="form-group">
+            <label for="releaseVersion">Version</label>
+            <input type="text" id="releaseVersion" placeholder="Leave blank to auto-increment" pattern="[0-9]+\.[0-9]+\.[0-9]+">
+            <small style="color: #666; margin-top: 5px; display: block;">Format: X.Y.Z (e.g., 1.0.1) - Leave blank to auto-increment patch version</small>
+          </div>
+          <div class="form-group">
+            <label for="waiverText">Legal Waiver Text</label>
+            <textarea id="waiverText" required rows="12" style="font-family: system-ui, sans-serif; resize: vertical; min-height: 200px;"></textarea>
+          </div>
+          <button type="submit" class="btn-primary">Create Release</button>
+        </form>
       </div>
 
-      <div class="button-group">
-        <button type="submit" class="btn-search">Search</button>
-        <button type="button" class="btn-clear" onclick="clearForm()">Clear</button>
+      <div class="section">
+        <h2>Release History</h2>
+        <div id="releaseHistory" class="release-history">
+          <div class="loading">Loading...</div>
+        </div>
       </div>
-    </form>
-
-    <div class="results" id="results"></div>
+    </div>
   </div>
 
   <script>
+    let currentProperties = [];
+
+    // Tab switching
+    function showTab(tabName) {
+      document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+
+      const tabs = document.querySelectorAll('.tab');
+      tabs.forEach(tab => {
+        if (tab.textContent.toLowerCase().includes(tabName === 'search' ? 'search' : tabName === 'activities' ? 'activities' : tabName === 'properties' ? 'properties' : 'releases')) {
+          tab.classList.add('active');
+        }
+      });
+      document.getElementById(tabName + 'Tab').classList.add('active');
+
+      if (tabName === 'activities') {
+        loadPropertySelector();
+        loadActivities();
+      }
+      if (tabName === 'properties') {
+        loadProperties();
+      }
+      if (tabName === 'releases') {
+        loadReleases();
+      }
+    }
+
+    async function loadPropertySelector() {
+      const selector = document.getElementById('propertySelect');
+      try {
+        const response = await fetch('/admin/properties');
+        const data = await response.json();
+
+        if (!data.ok) {
+          throw new Error(data.error);
+        }
+
+        currentProperties = data.properties;
+        selector.innerHTML = currentProperties.map(p =>
+          \`<option value="\${p.id}">\${p.name}</option>\`
+        ).join('');
+
+      } catch (error) {
+        selector.innerHTML = '<option value="">Error loading properties</option>';
+      }
+    }
+
+    // Search functionality
     const form = document.getElementById('searchForm');
     const resultsDiv = document.getElementById('results');
 
-    // Load all results on page load
     window.addEventListener('load', () => search());
 
     form.addEventListener('submit', (e) => {
@@ -234,6 +536,7 @@ export async function handleAdmin() {
               <th>Property</th>
               <th>Check-in</th>
               <th>Activities</th>
+              <th>Download</th>
             </tr>
           </thead>
           <tbody>
@@ -249,7 +552,13 @@ export async function handleAdmin() {
                   <td>\${escapeHtml(row.property_id)}</td>
                   <td>\${row.checkin_date}</td>
                   <td>
-                    \${activities.map(a => '<span class="activity-badge">' + escapeHtml(a) + '</span>').join('')}
+                    \${activities.map(a =>
+                      '<span class="activity-badge">' +
+                      escapeHtml(a) + '</span>'
+                    ).join('')}
+                  </td>
+                  <td>
+                    <button class="btn-primary" onclick="downloadAllWaivers('\${escapeHtml(row.submission_id)}')" style="padding: 8px 12px; font-size: 13px;">Download All</button>
                   </td>
                 </tr>
               \`;
@@ -270,6 +579,372 @@ export async function handleAdmin() {
       const div = document.createElement('div');
       div.textContent = text;
       return div.innerHTML;
+    }
+
+    // Activities Management
+    const messageDiv = document.getElementById('message');
+    const activitiesList = document.getElementById('activitiesList');
+
+    function showMessage(text, type = 'success') {
+      messageDiv.innerHTML = \`<div class="message \${type}">\${text}</div>\`;
+      setTimeout(() => messageDiv.innerHTML = '', 5000);
+    }
+
+    async function loadActivities() {
+      const selector = document.getElementById('propertySelect');
+      const propertyId = selector.value;
+
+      if (!propertyId) return;
+
+      try {
+        const response = await fetch(\`/admin/activities?property=\${propertyId}\`);
+        const data = await response.json();
+
+        if (!data.ok) {
+          throw new Error(data.error);
+        }
+
+        displayActivities(data.activities);
+      } catch (error) {
+        activitiesList.innerHTML = \`<div class="error">Error loading activities: \${error.message}</div>\`;
+      }
+    }
+
+    function displayActivities(activities) {
+      if (activities.length === 0) {
+        activitiesList.innerHTML = '<p>No activities found.</p>';
+        return;
+      }
+
+      activitiesList.innerHTML = activities.map(activity => \`
+        <div class="activity-item">
+          <div class="activity-info">
+            <div class="activity-slug">\${activity.slug}</div>
+            <div class="activity-label">\${activity.label}</div>
+            <span class="risk-badge risk-\${activity.risk}">\${activity.risk.toUpperCase()}</span>
+          </div>
+          <div class="activity-actions">
+            <button class="btn-warning" onclick="editActivity('\${activity.slug}', '\${activity.label}', '\${activity.risk}')">Edit</button>
+            <button class="btn-danger" onclick="removeActivity('\${activity.slug}')">Remove</button>
+          </div>
+        </div>
+      \`).join('');
+    }
+
+    document.getElementById('addForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const selector = document.getElementById('propertySelect');
+      const propertyId = selector.value;
+
+      if (!propertyId) {
+        showMessage('Please select a property first', 'error');
+        return;
+      }
+
+      const slug = document.getElementById('addSlug').value.trim();
+      const label = document.getElementById('addLabel').value.trim();
+      const risk = document.getElementById('addRisk').value;
+
+      try {
+        const response = await fetch(\`/admin/activities/add?property=\${propertyId}\`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ slug, label, risk })
+        });
+
+        const data = await response.json();
+
+        if (!data.ok) {
+          throw new Error(data.error);
+        }
+
+        showMessage(\`Activity "\${label}" added successfully!\`);
+        document.getElementById('addForm').reset();
+        loadActivities();
+      } catch (error) {
+        showMessage(error.message, 'error');
+      }
+    });
+
+    async function removeActivity(slug) {
+      if (!confirm(\`Remove activity "\${slug}"?\`)) return;
+
+      const selector = document.getElementById('propertySelect');
+      const propertyId = selector.value;
+
+      try {
+        const response = await fetch(\`/admin/activities/remove?property=\${propertyId}\`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ slug })
+        });
+
+        const data = await response.json();
+
+        if (!data.ok) {
+          throw new Error(data.error);
+        }
+
+        showMessage(\`Activity "\${slug}" removed successfully!\`);
+        loadActivities();
+      } catch (error) {
+        showMessage(error.message, 'error');
+      }
+    }
+
+    function editActivity(slug, currentLabel, currentRisk) {
+      const newLabel = prompt('Enter new label:', currentLabel);
+      if (newLabel === null) return;
+
+      const newRisk = prompt('Enter risk level (low/medium/high):', currentRisk);
+      if (newRisk === null) return;
+
+      if (!['low', 'medium', 'high'].includes(newRisk.toLowerCase())) {
+        showMessage('Invalid risk level. Must be low, medium, or high.', 'error');
+        return;
+      }
+
+      updateActivity(slug, newLabel, newRisk.toLowerCase());
+    }
+
+    async function updateActivity(slug, label, risk) {
+      const selector = document.getElementById('propertySelect');
+      const propertyId = selector.value;
+
+      try {
+        const response = await fetch(\`/admin/activities/update?property=\${propertyId}\`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ slug, label, risk })
+        });
+
+        const data = await response.json();
+
+        if (!data.ok) {
+          throw new Error(data.error);
+        }
+
+        showMessage(\`Activity "\${slug}" updated successfully!\`);
+        loadActivities();
+      } catch (error) {
+        showMessage(error.message, 'error');
+      }
+    }
+
+    // Properties Management
+    const propMessageDiv = document.getElementById('propMessage');
+    const propertiesList = document.getElementById('propertiesList');
+
+    function showPropMessage(text, type = 'success') {
+      propMessageDiv.innerHTML = \`<div class="message \${type}">\${text}</div>\`;
+      setTimeout(() => propMessageDiv.innerHTML = '', 5000);
+    }
+
+    async function loadProperties() {
+      try {
+        const response = await fetch('/admin/properties');
+        const data = await response.json();
+
+        if (!data.ok) {
+          throw new Error(data.error);
+        }
+
+        displayProperties(data.properties);
+      } catch (error) {
+        propertiesList.innerHTML = \`<div class="error">Error loading properties: \${error.message}</div>\`;
+      }
+    }
+
+    function displayProperties(properties) {
+      if (properties.length === 0) {
+        propertiesList.innerHTML = '<p>No properties found.</p>';
+        return;
+      }
+
+      propertiesList.innerHTML = properties.map(property => \`
+        <div class="activity-item">
+          <div class="activity-info">
+            <div class="activity-slug">\${property.id}</div>
+            <div class="activity-label">\${property.name}</div>
+          </div>
+          <div class="activity-actions">
+            <button class="btn-danger" onclick="removeProperty('\${property.id}')">Remove</button>
+          </div>
+        </div>
+      \`).join('');
+    }
+
+    document.getElementById('addPropertyForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const id = document.getElementById('propId').value.trim();
+      const name = document.getElementById('propName').value.trim();
+      const copyDefaults = document.getElementById('copyDefaultActivities').checked;
+
+      try {
+        const response = await fetch('/admin/properties/add', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, name, copyDefaultActivities: copyDefaults })
+        });
+
+        const data = await response.json();
+
+        if (!data.ok) {
+          throw new Error(data.error);
+        }
+
+        showPropMessage(\`Property "\${name}" added successfully!\`);
+        document.getElementById('addPropertyForm').reset();
+        document.getElementById('copyDefaultActivities').checked = true;
+        loadProperties();
+      } catch (error) {
+        showPropMessage(error.message, 'error');
+      }
+    });
+
+    async function removeProperty(id) {
+      if (!confirm(\`Remove property "\${id}"?\`)) return;
+
+      try {
+        const response = await fetch('/admin/properties/remove', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id })
+        });
+
+        const data = await response.json();
+
+        if (!data.ok) {
+          throw new Error(data.error);
+        }
+
+        showPropMessage(\`Property "\${id}" removed successfully!\`);
+        loadProperties();
+      } catch (error) {
+        showPropMessage(error.message, 'error');
+      }
+    }
+
+    // Hash verification only
+    async function verifyDocumentHash(submissionId, activity) {
+      try {
+        const docResponse = await fetch('/admin/document?submission=' + submissionId + '&activity=' + activity);
+        const docData = await docResponse.json();
+
+        if (!docData.ok) {
+          alert('Error: ' + docData.error);
+          return;
+        }
+
+        const verifyResponse = await fetch('/admin/verify?document=' + docData.document_id);
+        const verifyData = await verifyResponse.json();
+
+        if (!verifyData.ok) {
+          alert('Error: ' + verifyData.error);
+          return;
+        }
+
+        if (verifyData.verified) {
+          alert('✓ Hash Verified Successfully\\n\\nDocument ID: ' + docData.document_id + '\\nStored Hash: ' + verifyData.stored_hash.substring(0, 16) + '...\\nComputed Hash: ' + verifyData.computed_hash.substring(0, 16) + '...');
+        } else {
+          alert('✗ Hash Verification Failed\\n\\nDocument may have been tampered with\\nDocument ID: ' + docData.document_id + '\\nStored Hash: ' + verifyData.stored_hash.substring(0, 16) + '...\\nComputed Hash: ' + verifyData.computed_hash.substring(0, 16) + '...');
+        }
+      } catch (error) {
+        alert('Error verifying hash: ' + error.message);
+      }
+    }
+
+    async function downloadAllWaivers(submissionId) {
+      window.location.href = '/admin/download-all?submission=' + submissionId;
+    }
+
+    // Legal Releases functionality
+    async function loadReleases() {
+      const currentReleaseDiv = document.getElementById('currentRelease');
+      const historyDiv = document.getElementById('releaseHistory');
+
+      try {
+        const response = await fetch('/admin/releases');
+        const data = await response.json();
+
+        if (!data.ok) {
+          throw new Error(data.error);
+        }
+
+        // Display current release
+        if (data.current) {
+          const rel = data.current;
+          currentReleaseDiv.innerHTML = \`
+            <div style="padding: 15px; background: #f0f9ff; border-left: 4px solid #0070f3; border-radius: 4px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <strong style="font-size: 18px;">Version \${rel.version}</strong>
+                <span style="color: #666; font-size: 14px;">\${new Date(rel.release_date).toLocaleDateString()}</span>
+              </div>
+              <div style="white-space: pre-wrap; font-size: 14px; line-height: 1.6; color: #333; margin-top: 10px;">\${rel.waiver_text}</div>
+            </div>
+          \`;
+        } else {
+          currentReleaseDiv.innerHTML = '<div class="empty">No releases yet. Create the first release below.</div>';
+        }
+
+        // Display history
+        if (data.releases && data.releases.length > 0) {
+          historyDiv.innerHTML = data.releases.map(rel => \`
+            <div style="padding: 12px; background: #fafafa; border: 1px solid #e0e0e0; border-radius: 4px; margin-bottom: 10px;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <strong>Version \${rel.version}</strong>
+                <span style="color: #666; font-size: 13px;">\${new Date(rel.release_date).toLocaleDateString()}</span>
+              </div>
+              <div style="white-space: pre-wrap; font-size: 13px; line-height: 1.5; color: #555; margin-top: 8px; max-height: 100px; overflow-y: auto;">\${rel.waiver_text}</div>
+            </div>
+          \`).join('');
+        } else {
+          historyDiv.innerHTML = '<div class="empty">No release history</div>';
+        }
+
+        // Populate form with current waiver text
+        if (data.current) {
+          document.getElementById('waiverText').value = data.current.waiver_text;
+        }
+      } catch (error) {
+        currentReleaseDiv.innerHTML = '<div class="error">Error loading releases: ' + error.message + '</div>';
+        historyDiv.innerHTML = '';
+      }
+    }
+
+    document.getElementById('releaseForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const version = document.getElementById('releaseVersion').value.trim();
+      const waiverText = document.getElementById('waiverText').value.trim();
+
+      try {
+        const response = await fetch('/admin/releases/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ version: version || null, waiver_text: waiverText })
+        });
+
+        const data = await response.json();
+
+        if (!data.ok) {
+          throw new Error(data.error);
+        }
+
+        showReleaseMessage(\`Release version \${data.version} created successfully!\`);
+        document.getElementById('releaseVersion').value = '';
+        loadReleases();
+      } catch (error) {
+        showReleaseMessage(error.message, 'error');
+      }
+    });
+
+    function showReleaseMessage(msg, type = 'success') {
+      const div = document.getElementById('releaseMessage');
+      div.innerHTML = \`<div class="\${type === 'error' ? 'error' : 'success'}">\${msg}</div>\`;
+      setTimeout(() => div.innerHTML = '', 5000);
     }
   </script>
 </body>

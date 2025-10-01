@@ -14,7 +14,6 @@ enabled = true
 
 [vars]                                 # quick, non-secret config
 ARCHERY_PIN   = "1234"
-LEGAL_VERSION = "2024-06"
 EMAIL_FROM    = "noreply@waivers.rtxsecured.com"
 DEV_MODE      = "false"                 # Set to "false" in production
 

@@ -1,4 +1,4 @@
-import { json } from '../utils/resp.js';
+import { json } from '../../utils/admin.js';
 
 export async function handleAdminSearch(request, env) {
   const url = new URL(request.url);
