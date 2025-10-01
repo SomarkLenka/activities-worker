@@ -1,7 +1,33 @@
 export async function htmlPage (env) {
-  // property list pulled once from KV and embedded as <script> blob
-  const propsJSON = await env.PROPS_KV.get('props', 'text') || '[]';
+  // Fetch all properties from KV
+  const propertiesJSON = await env.PROPS_KV.get('properties', 'text');
+  const properties = propertiesJSON ? JSON.parse(propertiesJSON) : [];
+
+  // Fetch activities for each property
+  const propsData = [];
+  for (const property of properties) {
+    const activities = await env.PROPS_KV.get(`property:${property.id}:activities`, 'json') || [];
+    propsData.push({
+      id: property.id,
+      name: property.name,
+      activities: activities
+    });
+  }
+
+  // Fetch risk descriptions
+  const risks = {};
+  for (const level of ['low', 'medium', 'high']) {
+    const riskData = await env.PROPS_KV.get(`risk:${level}`, 'json');
+    if (riskData) {
+      risks[level] = riskData;
+    }
+  }
+
+  const propsJSON = JSON.stringify(propsData);
   const props64   = btoa(unescape(encodeURIComponent(propsJSON)));
+
+  const risksJSON = JSON.stringify(risks);
+  const risks64   = btoa(unescape(encodeURIComponent(risksJSON)));
 
   return new Response(`
 <!doctype html>
@@ -11,21 +37,22 @@ export async function htmlPage (env) {
 <style>
   body{font-family:system-ui;margin:2rem auto;max-width:1000px;padding:0 1rem}
   label{display:block;margin:.4rem 0}
-  canvas{border:1px solid #999;width:75%;touch-action:none}
-  .activities-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;column-gap:24px;padding:10px;background:#f5f5f5;border-radius:8px}
+  .signature-container{display:flex;flex-direction:column;align-items:center;gap:10px}
+  canvas{border:1px solid #999;width:75%;touch-action:none;display:block}
+  .activities-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;column-gap:24px;padding:10px;background:#f5f5f5;border-radius:8px;overflow:hidden}
   .activity-row{display:flex;gap:8px;align-items:center}
-  .activity-item{display:flex;align-items:center;padding:8px;background:white;border-radius:4px;border:1px solid #ddd;cursor:pointer;transition:all 0.2s;flex:1;position:relative;min-height:64px;overflow:visible}
+  .activity-item{display:flex;align-items:center;padding:8px;background:white;border-radius:4px;border:1px solid #ddd;cursor:pointer;transition:all 0.2s;flex:1;position:relative;min-height:64px;overflow:hidden}
   .activity-item:hover{background:#f0f7ff;border-color:#0070f3}
   .activity-item input[type="checkbox"]{margin-right:8px;cursor:pointer;width:18px;height:18px;flex-shrink:0}
   .activity-item label{margin:0;cursor:pointer;flex:1;display:flex;align-items:center;gap:8px;position:relative;z-index:1;justify-content:space-between}
   .activity-label-text{white-space:nowrap;flex-shrink:0;min-width:120px}
-  .risk-chip-wrapper{display:flex;align-items:center;justify-content:flex-end;min-width:200px;width:200px;transition:all 0.3s ease;position:relative;overflow:visible}
+  .risk-chip-wrapper{display:flex;align-items:center;justify-content:flex-end;min-width:200px;width:200px;transition:all 0.3s ease;position:relative;overflow:visible;z-index:10}
   .risk-chip{padding:6px 12px;border-radius:12px;color:white;font-size:11px;font-weight:500;white-space:nowrap;display:inline-block;width:100px;text-align:center;transition:transform 0.3s ease;box-sizing:border-box;flex-shrink:0;position:relative;z-index:2}
   .risk-chip-wrapper:hover .risk-chip{transform:translateX(-110px)}
   .risk-low{background:#16a34a}
   .risk-medium{background:#f97316}
   .risk-high{background:#dc2626}
-  .risk-details{position:absolute;right:0;width:190px;opacity:0;font-size:10px;line-height:1.3;color:#333;transition:opacity 0.3s ease;padding-left:108px;display:block;box-sizing:border-box}
+  .risk-details{position:absolute;right:0;width:190px;opacity:0;font-size:9px;line-height:1.2;color:#333;transition:opacity 0.3s ease;padding-left:108px;display:block;box-sizing:border-box;max-height:56px;overflow-y:auto}
   .risk-chip-wrapper:hover .risk-details{opacity:1}
   .activity-initial{width:45px;height:45px;text-align:center;padding:0;border:1px solid #ccc;border-radius:4px;visibility:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:14px}
   .activity-initial.visible{visibility:visible}
@@ -60,8 +87,10 @@ export async function htmlPage (env) {
     </label>
 
     <h3>Signature</h3>
-    <canvas id="sign" width="600" height="200"></canvas><br>
-    <button id="clearSig" type="button">Clear</button><br><br>
+    <div class="signature-container">
+      <canvas id="sign" width="600" height="200"></canvas>
+      <button id="clearSig" type="button">Clear</button>
+    </div>
 
     <button id="submit">Submit</button>
   </form>
@@ -69,9 +98,11 @@ export async function htmlPage (env) {
   <div id="thanks" hidden></div>
 
 <script type="module">
-  /* ---------- bootstrap property list -------------------- */
+  /* ---------- bootstrap property list and risks -------------------- */
   let props = JSON.parse(atob('${props64}'));
+  const risks = JSON.parse(atob('${risks64}'));
   console.log("Raw props data:", props);
+  console.log("Risk descriptions:", risks);
 
   // Handle both array and single object formats
   if (!Array.isArray(props)) {
@@ -85,12 +116,22 @@ export async function htmlPage (env) {
   /* ---------- activity checkboxes ------------------------- */
   const actsDiv      = document.getElementById('activities');
   const masterCheck  = document.getElementById('master');
-  const chosen       = new Map(); // slug -> {itemDiv, initialInput}
+  let chosen         = new Map(); // slug -> {itemDiv, initialInput}
 
-  const activities = props[0]?.activities ?? [];   // assumes all props share list
-  console.log("Activities array:", activities);
-  console.log("Activities container:", actsDiv);
-  activities.forEach(a => {
+  function loadActivities() {
+    const selectedProp = props.find(p => p.id === propSel.value);
+    const activities = selectedProp?.activities ?? [];
+
+    console.log("Loading activities for:", propSel.value);
+    console.log("Activities array:", activities);
+
+    // Clear existing activities
+    actsDiv.innerHTML = '';
+    chosen.clear();
+    masterCheck.disabled = true;
+    masterCheck.checked = false;
+
+    activities.forEach(a => {
     const rowDiv = document.createElement('div');
     rowDiv.className = 'activity-row';
 
@@ -121,21 +162,13 @@ export async function htmlPage (env) {
       const riskDetails = document.createElement('span');
       riskDetails.className = 'risk-details';
 
-      // Define risk details based on activity
-      const riskDescriptions = {
-        'archery': 'Minor injuries from equipment handling, requires safety training',
-        'kayaking': 'Water-related risks, requires swimming ability and life vest',
-        'ziplining': 'Height-related risks, equipment failure possible, requires harness',
-        'snorkeling': 'Water exposure, marine life encounters, breathing equipment',
-        'safari-tour': 'Wildlife observation, minimal direct contact risks',
-        'boat-tour': 'Water travel, weather dependent, life jackets required',
-        'spelunking': 'Confined spaces, uneven terrain, lighting dependent',
-        'scuba-diving': 'Deep water, decompression risks, certification required',
-        'paragliding': 'High altitude flight, weather dependent, serious injury possible',
-        'bungee-jumping': 'Extreme height, cord failure possible, serious injury or death possible'
-      };
-
-      riskDetails.textContent = riskDescriptions[a.slug] || 'Activity-specific risks apply';
+      // Use dynamic risk descriptions from KV store
+      const riskData = risks[a.risk];
+      if (riskData) {
+        riskDetails.textContent = riskData.description || 'Activity-specific risks apply';
+      } else {
+        riskDetails.textContent = 'Activity-specific risks apply';
+      }
 
       chipWrapper.appendChild(riskChip);
       chipWrapper.appendChild(riskDetails);
@@ -174,7 +207,14 @@ export async function htmlPage (env) {
     rowDiv.appendChild(itemDiv);
     rowDiv.appendChild(initialInput);
     actsDiv.appendChild(rowDiv);
-  });
+    });
+  }
+
+  // Load activities when property selection changes
+  propSel.addEventListener('change', loadActivities);
+
+  // Load activities for initial property
+  loadActivities();
 
   function validateMasterCheckbox() {
     let allFilled = true;
