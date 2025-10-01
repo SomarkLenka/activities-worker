@@ -44,7 +44,7 @@ export async function htmlPage (env) {
   .content{padding:2rem}
   .form-group{margin-bottom:1.5rem}
   .form-group label{display:block;margin-bottom:0.5rem;font-weight:600;font-size:0.875rem;color:#475569}
-  .form-group input,.form-group select{width:100%;padding:0.75rem 1rem;border:1px solid #cbd5e1;border-radius:8px;font-size:1rem;transition:all 0.2s}
+  .form-group input,.form-group select{width:25%;padding:0.75rem 1rem;border:1px solid #cbd5e1;border-radius:8px;font-size:1rem;transition:all 0.2s}
   .form-group input:focus,.form-group select:focus{outline:none;border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,0.1)}
   .section-title{font-size:1.25rem;font-weight:700;color:#0f172a;margin:2rem 0 1rem 0;padding-bottom:0.5rem;border-bottom:2px solid #e2e8f0}
   .activities-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;column-gap:24px;padding:0;overflow:hidden}
@@ -86,6 +86,7 @@ export async function htmlPage (env) {
   @media (max-width:768px){
     .content{padding:1.5rem}
     .activities-grid{grid-template-columns:1fr}
+    .form-group input,.form-group select{width:100%}
     canvas{width:100%}
   }
 </style>
