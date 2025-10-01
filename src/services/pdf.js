@@ -27,20 +27,34 @@ async function generateDocumentHash(data) {
   return hashHex;
 }
 
-function wrapText(text, maxChars) {
-  const words = text.split(' ');
+function wrapText(text, maxWidth, font, fontSize) {
+  // First, split by newlines to preserve intentional line breaks
+  const paragraphs = text.replace(/\r\n/g, '\n').split('\n');
   const lines = [];
-  let currentLine = '';
 
-  for (const word of words) {
-    if ((currentLine + word).length <= maxChars) {
-      currentLine += (currentLine ? ' ' : '') + word;
-    } else {
-      if (currentLine) lines.push(currentLine);
-      currentLine = word;
+  for (const paragraph of paragraphs) {
+    if (!paragraph.trim()) {
+      lines.push('');
+      continue;
     }
+
+    const words = paragraph.split(' ');
+    let currentLine = '';
+
+    for (const word of words) {
+      const testLine = currentLine ? currentLine + ' ' + word : word;
+      const testWidth = font.widthOfTextAtSize(testLine, fontSize);
+
+      if (testWidth <= maxWidth) {
+        currentLine = testLine;
+      } else {
+        if (currentLine) lines.push(currentLine);
+        currentLine = word;
+      }
+    }
+    if (currentLine) lines.push(currentLine);
   }
-  if (currentLine) lines.push(currentLine);
+
   return lines;
 }
 
@@ -106,11 +120,27 @@ export async function makePDFs (data, subId, env) {
     const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
     const { width, height } = page.getSize();
+    const leftMargin = 50;
+    const rightMargin = 50;
+    const bottomMargin = 80;
+    const textWidth = width - leftMargin - rightMargin;
     let yPos = height - 80;
+    let currentPage = page;
+
+    // Helper function to check if we need a new page
+    const checkNewPage = (requiredSpace) => {
+      if (yPos - requiredSpace < bottomMargin) {
+        currentPage = pdfDoc.addPage([595, 842]);
+        yPos = height - 80;
+        return true;
+      }
+      return false;
+    };
 
     /* ----- Title -------------------------------------------------- */
-    page.drawText(`${act.toUpperCase()} — Release of Liability`, {
-      x: 50,
+    checkNewPage(60);
+    currentPage.drawText(`${act.toUpperCase()} — Release of Liability`, {
+      x: leftMargin,
       y: yPos,
       size: 20,
       font: boldFont,
@@ -128,8 +158,9 @@ export async function makePDFs (data, subId, env) {
     ];
 
     for (const detail of details) {
-      page.drawText(detail, {
-        x: 50,
+      checkNewPage(25);
+      currentPage.drawText(detail, {
+        x: leftMargin,
         y: yPos,
         size: 12,
         font,
@@ -142,9 +173,10 @@ export async function makePDFs (data, subId, env) {
     yPos -= 20;
 
     // Risk level
+    checkNewPage(40);
     const riskLabel = `Risk Level: ${riskLevel.toUpperCase()}`;
-    page.drawText(riskLabel, {
-      x: 50,
+    currentPage.drawText(riskLabel, {
+      x: leftMargin,
       y: yPos,
       size: 12,
       font: boldFont,
@@ -153,10 +185,11 @@ export async function makePDFs (data, subId, env) {
     yPos -= 20;
 
     if (riskData?.description) {
-      const riskDesc = wrapText(riskData.description, 80);
+      const riskDesc = wrapText(riskData.description, textWidth, font, 10);
       for (const line of riskDesc) {
-        page.drawText(line, {
-          x: 50,
+        checkNewPage(15);
+        currentPage.drawText(line, {
+          x: leftMargin,
           y: yPos,
           size: 10,
           font,
@@ -169,8 +202,9 @@ export async function makePDFs (data, subId, env) {
     yPos -= 15;
 
     // Legal waiver text from release
-    page.drawText('Waiver and Release:', {
-      x: 50,
+    checkNewPage(40);
+    currentPage.drawText('Waiver and Release:', {
+      x: leftMargin,
       y: yPos,
       size: 12,
       font: boldFont,
@@ -178,10 +212,11 @@ export async function makePDFs (data, subId, env) {
     });
     yPos -= 20;
 
-    const waiverLines = wrapText(latestRelease.waiver_text, 80);
+    const waiverLines = wrapText(latestRelease.waiver_text, textWidth, font, 9);
     for (const line of waiverLines) {
-      page.drawText(line, {
-        x: 50,
+      checkNewPage(14);
+      currentPage.drawText(line, {
+        x: leftMargin,
         y: yPos,
         size: 9,
         font,
@@ -192,8 +227,9 @@ export async function makePDFs (data, subId, env) {
 
     /* ----- Signature image ---------------------------------------- */
     yPos -= 20;
-    page.drawText('Signature:', {
-      x: 50,
+    checkNewPage(120);
+    currentPage.drawText('Signature:', {
+      x: leftMargin,
       y: yPos,
       size: 12,
       font,
@@ -208,16 +244,16 @@ export async function makePDFs (data, subId, env) {
         const signatureImage = await pdfDoc.embedPng(signatureBytes);
 
         const signatureDims = signatureImage.scale(0.5);
-        page.drawImage(signatureImage, {
-          x: 50,
+        currentPage.drawImage(signatureImage, {
+          x: leftMargin,
           y: yPos - signatureDims.height,
           width: signatureDims.width,
           height: signatureDims.height,
         });
       } catch (err) {
         console.error('Error embedding signature:', err);
-        page.drawText('[Signature image could not be embedded]', {
-          x: 50,
+        currentPage.drawText('[Signature image could not be embedded]', {
+          x: leftMargin,
           y: yPos - 20,
           size: 10,
           font,
@@ -254,16 +290,23 @@ export async function makePDFs (data, subId, env) {
     const documentHash = await generateDocumentHash(hashData);
 
     /* ----- Footer ------------------------------------------------- */
-    page.drawText(`Version ${latestRelease.version} (${latestRelease.release_date}) • Document ID: ${documentId}`, {
-      x: 50,
+    // Add footer to the last page (currentPage) at bottom right
+    const versionText = `Legal Version ${latestRelease.version} (${latestRelease.release_date}) • Document ID: ${documentId}`;
+    const hashText = `Verification Hash: ${documentHash.substring(0, 32)}...`;
+
+    const versionWidth = font.widthOfTextAtSize(versionText, 7);
+    const hashWidth = font.widthOfTextAtSize(hashText, 7);
+
+    currentPage.drawText(versionText, {
+      x: width - rightMargin - versionWidth,
       y: 40,
       size: 7,
       font,
       color: rgb(0.5, 0.5, 0.5),
     });
 
-    page.drawText(`Verification Hash: ${documentHash.substring(0, 32)}...`, {
-      x: 50,
+    currentPage.drawText(hashText, {
+      x: width - rightMargin - hashWidth,
       y: 28,
       size: 7,
       font,

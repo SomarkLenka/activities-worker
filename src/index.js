@@ -9,6 +9,7 @@ import { handleAdminVerify } from './routes/admin/verify.js';
 import { handleAdminReleases } from './routes/admin/releases.js';
 import { handleAdminDownloadAll } from './routes/admin/download-all.js';
 import { handleAdminDebug } from './routes/admin/debug.js';
+import { handleAdminApiDocs } from './routes/admin/api-docs.js';
 import { handleStatus } from './routes/status.js';
 import { handleDownload } from './routes/download.js';
 import { handleAdmin } from './utils/admin.js';
@@ -28,6 +29,7 @@ export default {
       if (request.method === 'GET'  && pathname === '/admin/verify')          return await handleAdminVerify(request, env);
       if (request.method === 'GET'  && pathname === '/admin/download-all')    return await handleAdminDownloadAll(request, env);
       if (request.method === 'GET'  && pathname === '/admin/debug')           return await handleAdminDebug(request, env);
+      if (request.method === 'GET'  && pathname === '/admin/api-docs')        return await handleAdminApiDocs();
       if ((request.method === 'GET' || request.method === 'POST') && pathname.startsWith('/admin/releases'))	return await handleAdminReleases(request, env);
       if ((request.method === 'GET' || request.method === 'POST') && pathname.startsWith('/admin/activities')) 	return await handleAdminActivities(request, env);
       if ((request.method === 'GET' || request.method === 'POST') && pathname.startsWith('/admin/properties'))	return await handleAdminProperties(request, env);

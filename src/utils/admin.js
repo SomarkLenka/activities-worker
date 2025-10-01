@@ -281,6 +281,7 @@ export async function handleAdmin() {
       <button class="tab" onclick="showTab('properties')">Manage Properties</button>
       <button class="tab" onclick="showTab('releases')">Legal Releases</button>
       <button class="tab" onclick="showTab('debug')">Debug</button>
+      <button class="tab" onclick="showTab('api')">API Documentation</button>
     </div>
 
     <!-- Search Tab -->
@@ -460,6 +461,17 @@ export async function handleAdmin() {
         </div>
       </div>
     </div>
+
+    <!-- API Documentation Tab -->
+    <div id="apiTab" class="tab-content">
+      <div style="max-width: 900px; margin: 0 auto;">
+        <div style="background: white; padding: 30px; border-radius: 8px; line-height: 1.6;">
+          <div id="apiDocs" style="font-family: system-ui, sans-serif;">
+            <!-- API documentation will be rendered here -->
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -472,7 +484,7 @@ export async function handleAdmin() {
 
       const tabs = document.querySelectorAll('.tab');
       tabs.forEach(tab => {
-        if (tab.textContent.toLowerCase().includes(tabName === 'search' ? 'search' : tabName === 'activities' ? 'activities' : tabName === 'properties' ? 'properties' : tabName === 'releases' ? 'releases' : 'debug')) {
+        if (tab.textContent.toLowerCase().includes(tabName === 'search' ? 'search' : tabName === 'activities' ? 'activities' : tabName === 'properties' ? 'properties' : tabName === 'releases' ? 'releases' : tabName === 'debug' ? 'debug' : 'api')) {
           tab.classList.add('active');
         }
       });
@@ -490,6 +502,9 @@ export async function handleAdmin() {
       }
       if (tabName === 'debug') {
         loadDebugData();
+      }
+      if (tabName === 'api') {
+        loadApiDocs();
       }
     }
 
@@ -1067,6 +1082,50 @@ export async function handleAdmin() {
         kvDataDiv.innerHTML = '<div class="error">Error loading KV data: ' + escapeHtml(error.message) + '</div>';
         d1TablesDiv.innerHTML = '<div class="error">Error loading D1 data: ' + escapeHtml(error.message) + '</div>';
       }
+    }
+
+    // API Documentation functionality
+    function loadApiDocs() {
+      const apiDocsDiv = document.getElementById('apiDocs');
+      apiDocsDiv.innerHTML = \`<div class="loading">Loading API documentation...</div>\`;
+
+      fetch('/admin/api-docs')
+        .then(response => response.text())
+        .then(markdown => {
+          apiDocsDiv.innerHTML = convertMarkdownToHTML(markdown);
+        })
+        .catch(error => {
+          apiDocsDiv.innerHTML = '<div class="error">Error loading API documentation</div>';
+        });
+    }
+
+    // Simple markdown to HTML converter
+    function convertMarkdownToHTML(markdown) {
+      let html = markdown
+        // Escape HTML
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        // Headers
+        .replace(/^### (.+)$/gm, '<h3 style="margin-top: 30px; color: #333;">$1</h3>')
+        .replace(/^## (.+)$/gm, '<h2 style="margin-top: 40px; color: #0070f3; border-bottom: 2px solid #0070f3; padding-bottom: 10px;">$1</h2>')
+        .replace(/^# (.+)$/gm, '<h1 style="color: #0070f3;">$1</h1>')
+        // Bold
+        .replace(/\\*\\*(.+?)\\*\\*/g, '<strong>$1</strong>')
+        // Code blocks
+        .replace(/\`\`\`(\\w+)?\\n([\\s\\S]*?)\`\`\`/g, '<pre style="background: #f5f5f5; padding: 15px; border-radius: 4px; overflow-x: auto; border: 1px solid #ddd;"><code>$2</code></pre>')
+        // Inline code
+        .replace(/\`([^\`]+)\`/g, '<code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px; font-family: monospace; font-size: 0.9em;">$1</code>')
+        // Horizontal rule
+        .replace(/^---$/gm, '<hr style="margin: 30px 0; border: none; border-top: 1px solid #ddd;">')
+        // Lists
+        .replace(/^- (.+)$/gm, '<li style="margin: 5px 0;">$1</li>')
+        // Wrap consecutive list items
+        .replace(/(<li[^>]*>.*<\\/li>\\n?)+/g, '<ul style="margin: 10px 0; padding-left: 30px;">$&</ul>')
+        // Paragraphs
+        .replace(/^(?!<[h|u|p|l|d|c])(\\S.*)$/gm, '<p style="margin: 10px 0;">$1</p>');
+
+      return html;
     }
   </script>
 </body>
