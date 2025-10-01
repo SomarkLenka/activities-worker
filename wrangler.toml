@@ -24,17 +24,17 @@ preview_id = "6c095813078c4fb581dfd74fd2fdeda7"          # DEV_PROPS_KV for loca
 
 [[r2_buckets]]
 binding     = "WAIVERS_R2"
-bucket_name = "waivers"                 # create at dash.cloudflare.com → R2
+bucket_name = "waivers"                 # production bucket
+preview_bucket_name = "dev-waivers"     # development bucket for local testing
 
 [[d1_databases]]
 binding        = "waivers"
 database_name  = "waivers"
-database_id    = "0846e6ed-6eea-4b4f-a8dd-f9b9b232430e"             # replace after `wrangler d1 create`
+database_id    = "0846e6ed-6eea-4b4f-a8dd-f9b9b232430e"  
+preview_database_id = "a26bc6c3-64d9-45ab-80c8-8a10be058c27"           # replace after `wrangler d1 create`
 
 [[services]]                           # Cloudflare Browser Rendering
 binding    = "BROWSER"
 service    = "browser-worker"          # This connects to the deployed browser-worker on Cloudflare
-# For local dev with remote browser-worker, use: wrangler dev --remote
-# Or configure remote bindings as shown in the docs
 
 # optional: send via queue; here we call HTTP API directly in mail.js

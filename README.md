@@ -98,6 +98,7 @@ This application provides a complete digital waiver management solution built on
 - Cloudflare account with Workers subscription
 - Node.js and npm installed
 - Wrangler CLI installed (`npm install -g wrangler`)
+- Cloudflare API token (for remote deployment)
 
 ### Installation Steps
 
@@ -109,8 +110,11 @@ This application provides a complete digital waiver management solution built on
 
 2. **Create Cloudflare resources**:
    ```bash
-   # Create KV namespace
-   wrangler kv:namespace create PROPS_KV
+   # Create production KV namespace
+   wrangler kv namespace create PROPS_KV
+
+   # Create development KV namespace
+   wrangler kv namespace create DEV_PROPS_KV
 
    # Create D1 database
    wrangler d1 create waivers
@@ -120,13 +124,18 @@ This application provides a complete digital waiver management solution built on
    ```
 
 3. **Update `wrangler.toml`** with your resource IDs:
-   - KV namespace ID
+   - Production KV namespace ID (id field)
+   - Development KV namespace ID (preview_id field)
    - D1 database ID
    - Update email configuration
 
 4. **Initialize database**:
    ```bash
-   wrangler d1 execute waivers --file=migrations/0001_init.sql
+   # Local database
+   wrangler d1 execute waivers --local --file=migrations/0001_init.sql
+
+   # Remote database (requires API token)
+   wrangler d1 execute waivers --remote --file=migrations/0001_init.sql
    ```
 
 5. **Deploy browser rendering worker**:
@@ -136,7 +145,7 @@ This application provides a complete digital waiver management solution built on
    cd ..
    ```
 
-6. **Configure secrets**:
+6. **Configure secrets** (for production):
    ```bash
    wrangler secret put CLOUDFLARE_ACCOUNT_ID
    wrangler secret put CLOUDFLARE_API_TOKEN
@@ -144,7 +153,11 @@ This application provides a complete digital waiver management solution built on
 
 7. **Populate property data** in KV:
    ```bash
-   wrangler kv:key put --binding=PROPS_KV props '[{"id": "cabin-12", "name": "Riverside Cabin 12", "activities": [{"slug": "kayak", "label": "Kayak"}, {"slug": "pool", "label": "Pool"}, {"slug": "archery", "label": "Archery"}, {"slug": "sauna", "label": "Sauna"}]}]'
+   # Development namespace
+   wrangler kv key put --binding=PROPS_KV props '[{"id":"cabin-12","name":"Riverside Cabin 12","activities":[{"slug":"archery","label":"Archery"},{"slug":"kayaking","label":"Kayaking"},{"slug":"ziplining","label":"Ziplining"},{"slug":"snorkeling","label":"Snorkeling"},{"slug":"safari-tour","label":"Safari Tour"},{"slug":"boat-tour","label":"Boat Tour"},{"slug":"spelunking","label":"Spelunking"},{"slug":"scuba-diving","label":"Scuba Diving"},{"slug":"paragliding","label":"Paragliding"},{"slug":"bungee-jumping","label":"Bungee Jumping"}]}]' --preview
+
+   # Production namespace
+   wrangler kv key put --binding=PROPS_KV props '[{"id":"cabin-12","name":"Riverside Cabin 12","activities":[{"slug":"archery","label":"Archery"},{"slug":"kayaking","label":"Kayaking"},{"slug":"ziplining","label":"Ziplining"},{"slug":"snorkeling","label":"Snorkeling"},{"slug":"safari-tour","label":"Safari Tour"},{"slug":"boat-tour","label":"Boat Tour"},{"slug":"spelunking","label":"Spelunking"},{"slug":"scuba-diving","label":"Scuba Diving"},{"slug":"paragliding","label":"Paragliding"},{"slug":"bungee-jumping","label":"Bungee Jumping"}]}]'
    ```
 
 8. **Deploy main worker**:
@@ -174,14 +187,25 @@ DEV_MODE = "true"   # Development - PDFs downloadable
 ```
 
 ### Local Development
-```bash
-# Terminal 1 - Browser worker
-cd browser-worker
-wrangler dev
 
-# Terminal 2 - Main worker (with DEV_MODE enabled)
-wrangler dev
+#### Using Remote Browser Worker
+Since the Browser Rendering API requires Cloudflare's infrastructure, local development uses the deployed browser-worker:
+
+```bash
+# Option 1: Use remote flag (all remote resources)
+wrangler dev --remote
+
+# Option 2: Use development config with selective remote bindings
+wrangler dev --config wrangler.dev.toml --local
 ```
+
+#### Development Setup
+1. Browser-worker must be deployed to Cloudflare first
+2. Local development uses:
+   - Local D1 database
+   - Local preview KV namespace (DEV_PROPS_KV)
+   - Local R2 storage
+   - **Remote browser-worker service** for PDF generation
 
 **Development Mode Features:**
 - Individual download buttons for each activity waiver
@@ -189,6 +213,7 @@ wrangler dev
 - Visual indicator showing development mode is active
 - No email configuration required
 - PDFs still stored in R2 for persistence
+- Real PDF generation using remote browser service
 
 ### Testing
 Browser worker includes test setup with Vitest:
