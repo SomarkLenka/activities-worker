@@ -37,7 +37,7 @@ export async function htmlPage (env) {
 <style>
   *{box-sizing:border-box}
   body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;margin:0;padding:2rem 1rem;background:#f8fafc;color:#1e293b;line-height:1.6}
-  .container{max-width:900px;margin:0 auto;background:white;border-radius:16px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1),0 2px 4px -1px rgba(0,0,0,0.06);overflow:hidden}
+  .container{max-width:1200px;margin:0 auto;background:white;border-radius:16px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1),0 2px 4px -1px rgba(0,0,0,0.06);overflow:hidden}
   .header{background:linear-gradient(135deg,#3b82f6 0%,#1d4ed8 100%);padding:2.5rem 2rem;color:white;text-align:center}
   .header h1{margin:0 0 0.5rem 0;font-size:2rem;font-weight:700}
   .header p{margin:0;opacity:0.9;font-size:1rem}
