@@ -960,8 +960,8 @@ async function htmlPage(env2, submissionToken = null) {
     }
   }
   const propertiesResult = await env2.waivers.prepare(
-    "SELECT id, name FROM properties ORDER BY name"
-  ).all();
+    "SELECT id, name FROM properties WHERE id != ? ORDER BY name"
+  ).bind("default").all();
   const properties = propertiesResult.results || [];
   const propsData = [];
   for (const property of properties) {
@@ -4152,8 +4152,8 @@ async function handleAdminProperties(request, env2) {
 __name(handleAdminProperties, "handleAdminProperties");
 async function getProperties(env2) {
   const result = await env2.waivers.prepare(
-    "SELECT id, name FROM properties ORDER BY name"
-  ).all();
+    "SELECT id, name FROM properties WHERE id != ? ORDER BY name"
+  ).bind("default").all();
   return json({ ok: true, properties: result.results || [] });
 }
 __name(getProperties, "getProperties");
@@ -4173,8 +4173,8 @@ async function addProperty(request, env2) {
   ).bind(data.id, data.name, (/* @__PURE__ */ new Date()).toISOString()).run();
   if (data.copyDefaultActivities) {
     const defaultActivities = await env2.waivers.prepare(
-      "SELECT slug, label, risk FROM activities WHERE property_id = (SELECT id FROM properties LIMIT 1)"
-    ).all();
+      "SELECT slug, label, risk FROM activities WHERE property_id = ?"
+    ).bind("default").all();
     for (const activity of defaultActivities.results || []) {
       await env2.waivers.prepare(
         "INSERT INTO activities (property_id, slug, label, risk, created_at) VALUES (?, ?, ?, ?, ?)"
@@ -4182,8 +4182,8 @@ async function addProperty(request, env2) {
     }
   }
   const result = await env2.waivers.prepare(
-    "SELECT id, name FROM properties ORDER BY name"
-  ).all();
+    "SELECT id, name FROM properties WHERE id != ? ORDER BY name"
+  ).bind("default").all();
   return json({ ok: true, properties: result.results || [], added: data.id });
 }
 __name(addProperty, "addProperty");
@@ -4193,10 +4193,13 @@ async function removeProperty(request, env2) {
     return json({ ok: false, error: "Must provide id" }, 400);
   }
   const countResult = await env2.waivers.prepare(
-    "SELECT COUNT(*) as count FROM properties"
-  ).first();
+    "SELECT COUNT(*) as count FROM properties WHERE id != ?"
+  ).bind("default").first();
   if (countResult.count <= 1) {
     return json({ ok: false, error: "Cannot delete the last property" }, 400);
+  }
+  if (data.id === "default") {
+    return json({ ok: false, error: "Cannot delete the default property template" }, 400);
   }
   const existingCheck = await env2.waivers.prepare(
     "SELECT id FROM properties WHERE id = ?"
@@ -4208,8 +4211,8 @@ async function removeProperty(request, env2) {
     "DELETE FROM properties WHERE id = ?"
   ).bind(data.id).run();
   const result = await env2.waivers.prepare(
-    "SELECT id, name FROM properties ORDER BY name"
-  ).all();
+    "SELECT id, name FROM properties WHERE id != ? ORDER BY name"
+  ).bind("default").all();
   return json({ ok: true, properties: result.results || [], removed: data.id });
 }
 __name(removeProperty, "removeProperty");

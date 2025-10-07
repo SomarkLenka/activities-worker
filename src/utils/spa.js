@@ -15,10 +15,10 @@ export async function htmlPage(env, submissionToken = null) {
     }
   }
 
-  // Fetch all properties from database
+  // Fetch all properties from database (excluding default template)
   const propertiesResult = await env.waivers.prepare(
-    'SELECT id, name FROM properties ORDER BY name'
-  ).all();
+    'SELECT id, name FROM properties WHERE id != ? ORDER BY name'
+  ).bind('default').all();
   const properties = propertiesResult.results || [];
 
   // Fetch activities for each property

@@ -22,8 +22,8 @@ export async function handleAdminProperties(request, env) {
 
 async function getProperties(env) {
   const result = await env.waivers.prepare(
-    'SELECT id, name FROM properties ORDER BY name'
-  ).all();
+    'SELECT id, name FROM properties WHERE id != ? ORDER BY name'
+  ).bind('default').all();
 
   return json({ ok: true, properties: result.results || [] });
 }
@@ -49,8 +49,8 @@ async function addProperty(request, env) {
 
   if (data.copyDefaultActivities) {
     const defaultActivities = await env.waivers.prepare(
-      'SELECT slug, label, risk FROM activities WHERE property_id = (SELECT id FROM properties LIMIT 1)'
-    ).all();
+      'SELECT slug, label, risk FROM activities WHERE property_id = ?'
+    ).bind('default').all();
 
     for (const activity of (defaultActivities.results || [])) {
       await env.waivers.prepare(
@@ -60,8 +60,8 @@ async function addProperty(request, env) {
   }
 
   const result = await env.waivers.prepare(
-    'SELECT id, name FROM properties ORDER BY name'
-  ).all();
+    'SELECT id, name FROM properties WHERE id != ? ORDER BY name'
+  ).bind('default').all();
 
   return json({ ok: true, properties: result.results || [], added: data.id });
 }
@@ -74,11 +74,15 @@ async function removeProperty(request, env) {
   }
 
   const countResult = await env.waivers.prepare(
-    'SELECT COUNT(*) as count FROM properties'
-  ).first();
+    'SELECT COUNT(*) as count FROM properties WHERE id != ?'
+  ).bind('default').first();
 
   if (countResult.count <= 1) {
     return json({ ok: false, error: 'Cannot delete the last property' }, 400);
+  }
+
+  if (data.id === 'default') {
+    return json({ ok: false, error: 'Cannot delete the default property template' }, 400);
   }
 
   const existingCheck = await env.waivers.prepare(
@@ -94,8 +98,8 @@ async function removeProperty(request, env) {
   ).bind(data.id).run();
 
   const result = await env.waivers.prepare(
-    'SELECT id, name FROM properties ORDER BY name'
-  ).all();
+    'SELECT id, name FROM properties WHERE id != ? ORDER BY name'
+  ).bind('default').all();
 
   return json({ ok: true, properties: result.results || [], removed: data.id });
 }
