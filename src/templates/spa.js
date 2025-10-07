@@ -97,7 +97,7 @@
       document.getElementById('thanks').hidden = false;
       document.getElementById('thanks').innerHTML =
         '<h2>✓ Check Your Email</h2>' +
-        '<p style="color:#64748b;margin-bottom:1.5rem">We\\'ve sent a verification link to <strong>' + data.guestEmail + '</strong></p>' +
+        '<p style="color:#64748b;margin-bottom:1.5rem">We\'ve sent a verification link to <strong>' + data.guestEmail + '</strong></p>' +
         '<p style="color:#94a3b8;font-size:0.875rem">Click the link in the email to continue with your waiver.</p>';
     } catch (error) {
       console.error("Form submission error:", error);
