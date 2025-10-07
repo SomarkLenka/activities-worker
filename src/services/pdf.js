@@ -1,6 +1,7 @@
 import { nanoid } from '../utils/nanoid.js';
 import waiverTemplate from '../templates/waiver.html';
 import { getLatestRelease, getActivitiesByProperty, getAllRiskDescriptions } from '../utils/db.js';
+import { generateWaiverPDF } from '../utils/pdf-builder.js';
 
 function parseGuestName(guestName) {
   const nameParts = guestName.trim().split(/\s+/);
@@ -64,7 +65,68 @@ function generateWaiverHTML(data, activityInfo, riskData, latestRelease, documen
     .replace('{{DOCUMENT_HASH_SHORT}}', documentHash.substring(0, 32));
 }
 
+async function generatePDFWithBrowser(htmlContent, env) {
+  const response = await env.BROWSER.fetch('https://render', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      html: htmlContent,
+      options: {
+        format: 'A4',
+        printBackground: true
+      }
+    })
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Browser rendering failed: ${response.status} ${response.statusText} - ${errorText}`);
+  }
+
+  return await response.arrayBuffer();
+}
+
+async function generatePDFNative(data, activityInfo, riskData, latestRelease, documentId, documentHash) {
+  const riskLevel = activityInfo?.risk || 'medium';
+  const activityLabel = activityInfo?.label || data.activity;
+  const riskDescription = riskData?.description || '';
+
+  let waiverText = latestRelease.waiver_text;
+  if (riskDescription) {
+    waiverText = `Risk Description: ${riskDescription}\n\n${waiverText}`;
+  }
+
+  waiverText += `\n\nSignature: ${data.signature ? 'Electronic signature on file' : 'No signature provided'}`;
+  waiverText += `\n\nDocument ID: ${documentId}`;
+  waiverText += `\nVerification Hash: ${documentHash.substring(0, 32)}...`;
+  waiverText += `\nLegal Version ${latestRelease.version} (${latestRelease.release_date})`;
+
+  let signatureImage = null;
+  if (data.signature) {
+    const base64Data = data.signature.split(',')[1];
+    signatureImage = {
+      data: base64Data,
+      width: 400,
+      height: 150
+    };
+  }
+
+  const pdfData = {
+    activityLabel,
+    propertyId: data.propertyId,
+    checkinDate: data.checkinDate,
+    guestName: data.guestName,
+    initials: data.initials[data.activity],
+    riskLevel,
+    waiverText,
+    signatureImage
+  };
+
+  return generateWaiverPDF(pdfData);
+}
+
 export async function makePDFs(data, subId, env) {
+  const USE_BROWSER = env.USE_BROWSER_RENDERING !== 'false';
   const now = new Date();
   const createdAt = now.toISOString();
   const y = now.getUTCFullYear();
@@ -133,34 +195,29 @@ export async function makePDFs(data, subId, env) {
     const documentId = nanoid(12);
     const documentHash = hashMap[act];
 
-    const htmlContent = generateWaiverHTML(
-      { ...data, activity: act },
-      activityInfo,
-      riskData,
-      latestRelease,
-      documentId,
-      documentHash
-    );
-
     try {
-      const response = await env.BROWSER.fetch('https://render', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          html: htmlContent,
-          options: {
-            format: 'A4',
-            printBackground: true
-          }
-        })
-      });
+      let pdfBytes;
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Browser rendering failed: ${response.status} ${response.statusText} - ${errorText}`);
+      if (USE_BROWSER) {
+        const htmlContent = generateWaiverHTML(
+          { ...data, activity: act },
+          activityInfo,
+          riskData,
+          latestRelease,
+          documentId,
+          documentHash
+        );
+        pdfBytes = await generatePDFWithBrowser(htmlContent, env);
+      } else {
+        pdfBytes = await generatePDFNative(
+          { ...data, activity: act },
+          activityInfo,
+          riskData,
+          latestRelease,
+          documentId,
+          documentHash
+        );
       }
-
-      const pdfBytes = await response.arrayBuffer();
 
       const filename = `${lastName}-${firstName}-${act}-${subId}.pdf`;
       const key = `waivers/${y}/${m}/${d}/${data.propertyId}/${act}/${filename}`;
@@ -185,84 +242,123 @@ export async function makePDFs(data, subId, env) {
     }
 
   } else {
-    const batchItems = data.activities.map((act) => {
-      const activityInfo = activities.find(a => a.slug === act);
-      const riskLevel = activityInfo?.risk || 'medium';
-      const riskData = risks[riskLevel];
-      const documentId = nanoid(12);
-      const documentHash = hashMap[act];
-
-      const htmlContent = generateWaiverHTML(
-        { ...data, activity: act },
-        activityInfo,
-        riskData,
-        latestRelease,
-        documentId,
-        documentHash
-      );
-
-      return {
-        id: documentId,
-        act: act,
-        activityInfo: activityInfo,
-        html: htmlContent,
-        options: {
-          format: 'A4',
-          printBackground: true
-        }
-      };
-    });
-
     try {
-      const response = await env.BROWSER.fetch('https://render', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          batch: batchItems,
-          concurrency: 3
-        })
-      });
+      if (USE_BROWSER) {
+        const batchItems = data.activities.map((act) => {
+          const activityInfo = activities.find(a => a.slug === act);
+          const riskLevel = activityInfo?.risk || 'medium';
+          const riskData = risks[riskLevel];
+          const documentId = nanoid(12);
+          const documentHash = hashMap[act];
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Browser rendering failed: ${response.status} ${response.statusText} - ${errorText}`);
-      }
+          const htmlContent = generateWaiverHTML(
+            { ...data, activity: act },
+            activityInfo,
+            riskData,
+            latestRelease,
+            documentId,
+            documentHash
+          );
 
-      const { results: pdfResults, failed } = await response.json();
-
-      if (failed > 0) {
-        const failedItems = pdfResults.filter(r => !r.success);
-        const failedActivities = failedItems.map(r => {
-          const item = batchItems.find(b => b.id === r.id);
-          return item?.act || r.id;
-        }).join(', ');
-        throw new Error(`Failed to generate PDFs for: ${failedActivities}`);
-      }
-
-      const savePromises = pdfResults.map(async (result) => {
-        const batchItem = batchItems.find(b => b.id === result.id);
-        const filename = `${lastName}-${firstName}-${batchItem.act}-${subId}.pdf`;
-        const key = `waivers/${y}/${m}/${d}/${data.propertyId}/${batchItem.act}/${filename}`;
-
-        const pdfBytes = Uint8Array.from(atob(result.pdf), c => c.charCodeAt(0));
-
-        await env.WAIVERS_R2.put(key, pdfBytes, {
-          httpMetadata: { contentType: 'application/pdf' }
+          return {
+            id: documentId,
+            act: act,
+            activityInfo: activityInfo,
+            html: htmlContent,
+            options: {
+              format: 'A4',
+              printBackground: true
+            }
+          };
         });
 
-        return {
-          id: result.id,
-          activity: batchItem.act,
-          activityLabel: batchItem.activityInfo?.label || batchItem.act,
-          filename,
-          r2Key: key,
-          bytes: pdfBytes,
-          hash: hashMap[batchItem.act],
-          initials: data.initials[batchItem.act]
-        };
-      });
+        const response = await env.BROWSER.fetch('https://render', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            batch: batchItems,
+            concurrency: 3
+          })
+        });
 
-      results.push(...await Promise.all(savePromises));
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Browser rendering failed: ${response.status} ${response.statusText} - ${errorText}`);
+        }
+
+        const { results: pdfResults, failed } = await response.json();
+
+        if (failed > 0) {
+          const failedItems = pdfResults.filter(r => !r.success);
+          const failedActivities = failedItems.map(r => {
+            const item = batchItems.find(b => b.id === r.id);
+            return item?.act || r.id;
+          }).join(', ');
+          throw new Error(`Failed to generate PDFs for: ${failedActivities}`);
+        }
+
+        const savePromises = pdfResults.map(async (result) => {
+          const batchItem = batchItems.find(b => b.id === result.id);
+          const filename = `${lastName}-${firstName}-${batchItem.act}-${subId}.pdf`;
+          const key = `waivers/${y}/${m}/${d}/${data.propertyId}/${batchItem.act}/${filename}`;
+
+          const pdfBytes = Uint8Array.from(atob(result.pdf), c => c.charCodeAt(0));
+
+          await env.WAIVERS_R2.put(key, pdfBytes, {
+            httpMetadata: { contentType: 'application/pdf' }
+          });
+
+          return {
+            id: result.id,
+            activity: batchItem.act,
+            activityLabel: batchItem.activityInfo?.label || batchItem.act,
+            filename,
+            r2Key: key,
+            bytes: pdfBytes,
+            hash: hashMap[batchItem.act],
+            initials: data.initials[batchItem.act]
+          };
+        });
+
+        results.push(...await Promise.all(savePromises));
+      } else {
+        const savePromises = data.activities.map(async (act) => {
+          const activityInfo = activities.find(a => a.slug === act);
+          const riskLevel = activityInfo?.risk || 'medium';
+          const riskData = risks[riskLevel];
+          const documentId = nanoid(12);
+          const documentHash = hashMap[act];
+
+          const pdfBytes = await generatePDFNative(
+            { ...data, activity: act },
+            activityInfo,
+            riskData,
+            latestRelease,
+            documentId,
+            documentHash
+          );
+
+          const filename = `${lastName}-${firstName}-${act}-${subId}.pdf`;
+          const key = `waivers/${y}/${m}/${d}/${data.propertyId}/${act}/${filename}`;
+
+          await env.WAIVERS_R2.put(key, pdfBytes, {
+            httpMetadata: { contentType: 'application/pdf' }
+          });
+
+          return {
+            id: documentId,
+            activity: act,
+            activityLabel: activityInfo?.label || act,
+            filename,
+            r2Key: key,
+            bytes: pdfBytes,
+            hash: documentHash,
+            initials: data.initials[act]
+          };
+        });
+
+        results.push(...await Promise.all(savePromises));
+      }
 
     } catch (err) {
       console.error('Error generating PDFs with browser rendering:', err);
