@@ -45,6 +45,11 @@ export async function htmlPage(env, submissionToken = null) {
     risks[row.level] = { description: row.description };
   }
 
+  // Fetch latest legal release
+  const latestRelease = await env.waivers.prepare(
+    'SELECT version, release_date, waiver_text FROM releases ORDER BY release_date DESC, version DESC LIMIT 1'
+  ).first();
+
   const propsJSON = JSON.stringify(propsData);
   const props64 = btoa(unescape(encodeURIComponent(propsJSON)));
 
@@ -53,6 +58,9 @@ export async function htmlPage(env, submissionToken = null) {
 
   const submissionJSON = submissionData ? JSON.stringify(submissionData) : 'null';
   const submission64 = btoa(unescape(encodeURIComponent(submissionJSON)));
+
+  const releaseJSON = latestRelease ? JSON.stringify(latestRelease) : 'null';
+  const release64 = btoa(unescape(encodeURIComponent(releaseJSON)));
 
   return new Response(`
 <!doctype html>
@@ -97,6 +105,14 @@ export async function htmlPage(env, submissionToken = null) {
   .acceptance-box .tooltip{display:none;position:absolute;bottom:100%;left:50%;transform:translateX(-50%);background:#1e293b;color:white;padding:0.5rem 1rem;border-radius:6px;font-size:0.875rem;white-space:nowrap;margin-bottom:0.5rem;font-weight:400}
   .acceptance-box .tooltip::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:6px solid transparent;border-top-color:#1e293b}
   .acceptance-box:has(input[type="checkbox"]:disabled):hover .tooltip{display:block}
+  .legal-preview{background:#f8fafc;border:2px solid #e2e8f0;border-radius:10px;padding:1rem;margin:1.5rem 0}
+  .legal-preview-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem}
+  .legal-preview-title{font-weight:700;font-size:0.875rem;color:#475569}
+  .legal-preview-version{font-size:0.75rem;color:#94a3b8}
+  .legal-preview-content{max-height:150px;overflow-y:auto;font-size:0.75rem;line-height:1.5;color:#334155;white-space:pre-wrap;padding:0.75rem;background:white;border-radius:6px;border:1px solid #e2e8f0;transition:max-height 0.3s ease}
+  .legal-preview-content.expanded{max-height:450px}
+  .legal-preview-expand{padding:0.5rem 1rem;background:#64748b;color:white;font-size:0.75rem;font-weight:600;border:none;border-radius:6px;cursor:pointer;margin-top:0.75rem;transition:background 0.2s}
+  .legal-preview-expand:hover{background:#475569}
   .signature-container{display:flex;flex-direction:column;align-items:center;gap:12px;padding:1.5rem;background:#f8fafc;border-radius:10px;border:2px solid #e2e8f0}
   canvas{border:2px dashed #cbd5e1;border-radius:8px;width:90%;max-width:600px;touch-action:none;display:block;background:white}
   button{font-weight:600;border:none;cursor:pointer;transition:all 0.2s;font-size:1rem;border-radius:8px;font-family:inherit}
@@ -157,6 +173,15 @@ export async function htmlPage(env, submissionToken = null) {
         <h3 class="section-title">Select Activities</h3>
         <div id="activities" class="activities-grid"></div>
 
+        <div class="legal-preview">
+          <div class="legal-preview-header">
+            <span class="legal-preview-title">Legal Release Preview</span>
+            <span class="legal-preview-version" id="legalVersion"></span>
+          </div>
+          <div class="legal-preview-content" id="legalContent"></div>
+          <button type="button" class="legal-preview-expand" id="expandLegal">Expand Preview</button>
+        </div>
+
         <div class="acceptance-box">
           <input id="master" type="checkbox" required>
           <label for="master">I have read and accept all risks</label>
@@ -181,6 +206,7 @@ export async function htmlPage(env, submissionToken = null) {
   let props = JSON.parse(atob('${props64}'));
   const risks = JSON.parse(atob('${risks64}'));
   const submission = JSON.parse(atob('${submission64}'));
+  const release = JSON.parse(atob('${release64}'));
 
   console.log("Props:", props);
   console.log("Risks:", risks);
@@ -378,7 +404,27 @@ export async function htmlPage(env, submissionToken = null) {
   if (submission) {
     loadActivities();
     validateMasterCheckbox();
+
+    // Populate legal release preview
+    if (release) {
+      document.getElementById('legalVersion').textContent = 'Version ' + release.version + ' (' + release.release_date + ')';
+      document.getElementById('legalContent').textContent = release.waiver_text;
+    }
   }
+
+  /* ---------- legal preview expand/collapse -------------------- */
+  document.getElementById('expandLegal')?.addEventListener('click', function() {
+    const content = document.getElementById('legalContent');
+    const isExpanded = content.classList.contains('expanded');
+
+    if (isExpanded) {
+      content.classList.remove('expanded');
+      this.textContent = 'Expand Preview';
+    } else {
+      content.classList.add('expanded');
+      this.textContent = 'Collapse Preview';
+    }
+  });
 
   /* ---------- signature pad -------------------------------- */
   const canvas = document.getElementById('sign');
