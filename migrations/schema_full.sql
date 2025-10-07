@@ -24,6 +24,12 @@ DROP TABLE IF EXISTS submissions;
 
 -- Submissions table: One row per waiver form submission
 -- All submissions now require verification_token (two-step flow only)
+-- Status values:
+--   'pending' - Awaiting verification
+--   'processing' - PDF generation in progress
+--   'emailed' - PDFs generated and emailed successfully
+--   'completed' - Legacy/dev mode completion
+--   'failed' - PDF generation or email sending failed
 CREATE TABLE submissions (
   submission_id TEXT PRIMARY KEY,
   created_at TEXT NOT NULL,
@@ -35,7 +41,8 @@ CREATE TABLE submissions (
   status TEXT DEFAULT 'pending',
   verification_token TEXT NOT NULL UNIQUE,
   token_expires_at TEXT NOT NULL,
-  completed_at TEXT
+  completed_at TEXT,
+  error_message TEXT
 );
 
 -- Documents table: One row per generated PDF waiver document (legacy)
