@@ -8,13 +8,32 @@
     props = [props];
   }
 
-  const propSel = document.getElementById('prop');
-  if (!props || props.length === 0) {
-    propSel.add(new Option('No properties available', ''));
-    propSel.disabled = true;
+  // Wait for DOM to be ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializePage);
   } else {
-    props.forEach(p => propSel.add(new Option(p.name, p.id)));
+    initializePage();
   }
+
+  function initializePage() {
+    const propSel = document.getElementById('prop');
+    if (!propSel) {
+      console.error('Property select element not found');
+      return;
+    }
+
+    if (!props || props.length === 0) {
+      propSel.add(new Option('No properties available', ''));
+      propSel.disabled = true;
+    } else {
+      props.forEach(p => propSel.add(new Option(p.name, p.id)));
+    }
+
+    setupFormHandlers();
+  }
+
+  function setupFormHandlers() {
+    const propSel = document.getElementById('prop');
 
   /* ---------- Determine which form to show -------------------- */
   const initialForm = document.getElementById('initialForm');
@@ -330,3 +349,4 @@
       alert("Error submitting form: " + error.message);
     }
   };
+  }
