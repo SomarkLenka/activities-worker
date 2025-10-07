@@ -139,29 +139,6 @@
       labelText.textContent = a.label;
       label.appendChild(labelText);
 
-      if (a.risk) {
-        const chipWrapper = document.createElement('div');
-        chipWrapper.className = 'risk-chip-wrapper';
-
-        const riskChip = document.createElement('span');
-        riskChip.className = 'risk-chip risk-' + a.risk;
-        riskChip.textContent = a.risk.charAt(0).toUpperCase() + a.risk.slice(1) + ' Risk';
-
-        const riskDetails = document.createElement('span');
-        riskDetails.className = 'risk-details';
-
-        const riskData = risks[a.risk];
-        if (riskData) {
-          riskDetails.textContent = riskData.description || 'Activity-specific risks apply';
-        } else {
-          riskDetails.textContent = 'Activity-specific risks apply';
-        }
-
-        chipWrapper.appendChild(riskChip);
-        chipWrapper.appendChild(riskDetails);
-        label.appendChild(chipWrapper);
-      }
-
       const initialInput = document.createElement('input');
       initialInput.type = 'text';
       initialInput.maxLength = 4;
@@ -186,6 +163,29 @@
 
       itemDiv.appendChild(checkbox);
       itemDiv.appendChild(label);
+
+      if (a.risk) {
+        const chipWrapper = document.createElement('div');
+        chipWrapper.className = 'risk-chip-wrapper';
+
+        const riskChip = document.createElement('span');
+        riskChip.className = 'risk-chip risk-' + a.risk;
+        riskChip.textContent = a.risk.charAt(0).toUpperCase() + a.risk.slice(1) + ' Risk';
+
+        const riskDetails = document.createElement('span');
+        riskDetails.className = 'risk-details';
+
+        const riskData = risks[a.risk];
+        if (riskData) {
+          riskDetails.textContent = riskData.description || 'Activity-specific risks apply';
+        } else {
+          riskDetails.textContent = 'Activity-specific risks apply';
+        }
+
+        chipWrapper.appendChild(riskChip);
+        chipWrapper.appendChild(riskDetails);
+        itemDiv.appendChild(chipWrapper);
+      }
 
       itemDiv.onclick = () => {
         checkbox.checked = !checkbox.checked;
