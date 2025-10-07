@@ -252,7 +252,8 @@ export async function makePDFs(data, subId, env) {
       // Create a data URL with the HTML content
       const htmlDataUrl = `data:text/html;base64,${btoa(unescape(encodeURIComponent(htmlContent)))}`;
 
-      const response = await env.BROWSER.fetch('https://renderer/', {
+      // Try common endpoint patterns - adjust based on your browser-worker implementation
+      const response = await env.BROWSER.fetch('https://render', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

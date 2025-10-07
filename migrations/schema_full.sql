@@ -116,6 +116,7 @@ CREATE TABLE risk_descriptions (
 CREATE INDEX idx_search ON submissions(guest_name, guest_email, property_id, checkin_date);
 CREATE INDEX idx_submissions_token ON submissions(verification_token);
 CREATE INDEX idx_submissions_status ON submissions(status);
+CREATE UNIQUE INDEX idx_submissions_verification_token_unique ON submissions(verification_token) WHERE verification_token IS NOT NULL;
 
 -- Documents and hashes indexes (legacy)
 CREATE INDEX idx_hashes_document_id ON hashes(document_id);
