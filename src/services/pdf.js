@@ -71,7 +71,7 @@ async function generatePDFWithBrowser(htmlContent, env) {
 }
 
 export async function makePDFs(data, subId, env) {
-  const USE_BROWSER = env.USE_BROWSER_RENDERING !== 'false';
+  const USE_BROWSER = true;
   const now = new Date();
   const createdAt = now.toISOString();
   const y = now.getUTCFullYear();
