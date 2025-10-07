@@ -282,6 +282,7 @@ export async function makePDFs(data, subId, env) {
     results.push({
       id: documentId,
       activity: act,
+      activityLabel: activityInfo?.label || act,
       filename,
       r2Key: key,
       bytes: pdfBytes,
