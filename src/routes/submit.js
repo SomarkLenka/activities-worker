@@ -134,19 +134,21 @@ export async function handleCompleteSubmit(request, env, ctx) {
       archeryPin = env.ARCHERY_PIN || '1234';
     }
 
-    if (env.DEV_MODE === 'true') {
-      const pdfs = await makePDFs(submissionData, data.submissionId, env);
-      await saveDocuments(env, data.submissionId, pdfs);
-      await saveSubmissionActivities(env, submission.verification_token, pdfs, completedAt);
+    const pdfs = await makePDFs(submissionData, data.submissionId, env);
+    await saveDocuments(env, data.submissionId, pdfs);
+    await saveSubmissionActivities(env, submission.verification_token, pdfs, completedAt);
 
+    await sendWaiverEmail(submissionData, pdfs, archeryPin, env);
+
+    await env.waivers.prepare(
+      'UPDATE submissions SET status = ? WHERE submission_id = ?'
+    ).bind('completed', data.submissionId).run();
+
+    if (env.DEV_MODE === 'true') {
       const downloads = pdfs.map(p => ({
         filename: p.filename,
         url: `/download/${p.id}`
       }));
-
-      await env.waivers.prepare(
-        'UPDATE submissions SET status = ? WHERE submission_id = ?'
-      ).bind('completed', data.submissionId).run();
 
       return new Response(JSON.stringify({
         ok: true,
@@ -157,13 +159,9 @@ export async function handleCompleteSubmit(request, env, ctx) {
         headers: { 'content-type': 'application/json' }
       });
     } else {
-      ctx.waitUntil(
-        processWaiverAsync(submissionData, data.submissionId, submission.verification_token, env)
-      );
-
       return new Response(JSON.stringify({
         ok: true,
-        message: 'Your waivers are being processed and will be emailed to you shortly',
+        message: 'Your waivers have been emailed to you',
         pin: archeryPin
       }), {
         headers: { 'content-type': 'application/json' }
