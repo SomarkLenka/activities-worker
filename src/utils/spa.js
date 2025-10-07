@@ -9,7 +9,6 @@ import {
 } from './db.js';
 
 export async function htmlPage(env, submissionToken = null) {
-  // Helper function to encode data to base64
   function encodeToBase64(data) {
     const json = data === null || data === undefined ? 'null' : JSON.stringify(data);
     return btoa(unescape(encodeURIComponent(json)));
@@ -17,7 +16,6 @@ export async function htmlPage(env, submissionToken = null) {
 
   let submissionData = null;
 
-  // If token provided, fetch submission details
   if (submissionToken) {
     const result = await getSubmissionByToken(env, submissionToken);
 
@@ -29,10 +27,8 @@ export async function htmlPage(env, submissionToken = null) {
     }
   }
 
-  // Fetch all properties from database (excluding default template)
   const properties = await getAllProperties(env, true);
 
-  // Fetch activities for each property
   const propsData = [];
   for (const property of properties) {
     const activities = await getActivitiesByProperty(env, property.id);
@@ -44,10 +40,8 @@ export async function htmlPage(env, submissionToken = null) {
     });
   }
 
-  // Fetch risk descriptions from database
   const risks = await getAllRiskDescriptions(env);
 
-  // Fetch latest legal release
   const latestRelease = await getLatestRelease(env);
 
   const props64 = encodeToBase64(propsData);
