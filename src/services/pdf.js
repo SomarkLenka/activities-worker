@@ -170,7 +170,7 @@ export async function makePDFs(data, subId, env) {
       const pdfBytes = await response.arrayBuffer();
 
       // Save to R2
-      const filename = `${lastName}-${firstName}-${subId}.pdf`;
+      const filename = `${lastName}-${firstName}-${act}-${subId}.pdf`;
       const key = `waivers/${y}/${m}/${d}/${data.propertyId}/${act}/${filename}`;
 
       await env.WAIVERS_R2.put(key, pdfBytes, {
@@ -255,7 +255,7 @@ export async function makePDFs(data, subId, env) {
       // Save all PDFs to R2 concurrently
       const savePromises = pdfResults.map(async (result) => {
         const batchItem = batchItems.find(b => b.id === result.id);
-        const filename = `${lastName}-${firstName}-${subId}.pdf`;
+        const filename = `${lastName}-${firstName}-${batchItem.act}-${subId}.pdf`;
         const key = `waivers/${y}/${m}/${d}/${data.propertyId}/${batchItem.act}/${filename}`;
 
         // Decode base64 PDF
