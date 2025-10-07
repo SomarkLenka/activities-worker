@@ -3,6 +3,8 @@ import verificationEmailTemplate from '../templates/email-verification.html';
 import verificationTextTemplate from '../templates/email-verification.txt';
 import waiverEmailTemplate from '../templates/email-waiver.html';
 import waiverTextTemplate from '../templates/email-waiver.txt';
+import archeryPinHtmlTemplate from '../templates/archery-pin.html';
+import archeryPinTextTemplate from '../templates/archery-pin.txt';
 
 function parseEmailTemplate(template) {
   const lines = template.split('\n');
@@ -24,34 +26,55 @@ function parseEmailTemplate(template) {
   return headers;
 }
 
+function replaceTemplateVars(template, replacements) {
+  let result = template;
+  for (const [key, value] of Object.entries(replacements)) {
+    result = result.replace(new RegExp(`{{${key}}}`, 'g'), value);
+  }
+  return result;
+}
+
+async function sendEmail(resend, env, emailData) {
+  const { data: responseData, error } = await resend.emails.send({
+    ...emailData,
+    from: `${emailData.from} <${env.EMAIL_FROM}>`
+  });
+
+  if (error) {
+    console.error('Resend error:', error);
+    throw new Error(error.message);
+  }
+
+  return responseData;
+}
+
+function buildEmailData(text, html) {
+  const { subject, from, body } = parseEmailTemplate(text);
+  return {
+    from,
+    subject,
+    text: body,
+    html
+  };
+}
+
 export async function sendVerificationEmail(email, name, verificationUrl, env) {
   const resend = new Resend(env.RESEND_API_KEY);
 
-  const textTemplateProcessed = verificationTextTemplate
-    .replace('{{GUEST_NAME}}', name)
-    .replace('{{VERIFICATION_URL}}', verificationUrl);
+  const replacements = {
+    GUEST_NAME: name,
+    VERIFICATION_URL: verificationUrl
+  };
 
-  const htmlTemplateProcessed = verificationEmailTemplate
-    .replace('{{GUEST_NAME}}', name)
-    .replace('{{VERIFICATION_URL}}', verificationUrl);
+  const text = replaceTemplateVars(verificationTextTemplate, replacements);
+  const html = replaceTemplateVars(verificationEmailTemplate, replacements);
 
-  const { subject, from, body: bodyText } = parseEmailTemplate(textTemplateProcessed);
+  const emailData = buildEmailData(text, html);
+  emailData.to = email;
 
   try {
-    const { data: emailData, error } = await resend.emails.send({
-      from: `${from} <${env.EMAIL_FROM}>`,
-      to: email,
-      subject,
-      text: bodyText,
-      html: htmlTemplateProcessed
-    });
-
-    if (error) {
-      console.error('Resend error:', error);
-      throw new Error(error.message);
-    }
-
-    console.log('Verification email sent successfully:', emailData);
+    const responseData = await sendEmail(resend, env, emailData);
+    console.log('Verification email sent successfully:', responseData);
   } catch (error) {
     console.error('Verification email send error:', error);
     throw new Error('Failed to send verification email: ' + error.message);
@@ -61,50 +84,40 @@ export async function sendVerificationEmail(email, name, verificationUrl, env) {
 export async function sendWaiverEmail(data, pdfs, pin, env) {
   const resend = new Resend(env.RESEND_API_KEY);
 
-  const pdfListHtml = pdfs.map(p => `<li>${p.filename}</li>`).join('');
-  const pdfListText = pdfs.map(p => p.filename).join(', ');
+  const replacements = {
+    GUEST_NAME: data.guestName,
+    PROPERTY_ID: data.propertyId,
+    PDF_LIST: {
+      text: pdfs.map(p => p.filename).join(', '),
+      html: pdfs.map(p => `<li>${p.filename}</li>`).join('')
+    },
+    ARCHERY_PIN: {
+      text: pin ? replaceTemplateVars(archeryPinTextTemplate, { PIN: pin }) : '',
+      html: pin ? replaceTemplateVars(archeryPinHtmlTemplate, { PIN: pin }) : ''
+    }
+  };
 
-  const archeryPinHtml = pin
-    ? `<div style="background-color: #fef3c7; border: 2px solid #fbbf24; border-radius: 8px; padding: 16px; margin: 20px 0;">
-         <p style="margin: 0; color: #78350f; font-weight: 600;">Your Archery PIN: <strong>${pin}</strong></p>
-       </div>`
-    : '';
+  const getReplacements = (format) => {
+    const result = {};
+    for (const [key, value] of Object.entries(replacements)) {
+      result[key] = typeof value === 'object' && value !== null ? value[format] : value;
+    }
+    return result;
+  };
 
-  const archeryPinText = pin ? `Your Archery PIN is ${pin}\n\n` : '';
+  const text = replaceTemplateVars(waiverTextTemplate, getReplacements('text'));
+  const html = replaceTemplateVars(waiverEmailTemplate, getReplacements('html'));
 
-  const textTemplateProcessed = waiverTextTemplate
-    .replace('{{GUEST_NAME}}', data.guestName)
-    .replace('{{PROPERTY_ID}}', data.propertyId)
-    .replace('{{PDF_LIST}}', pdfListText)
-    .replace('{{ARCHERY_PIN}}', archeryPinText);
-
-  const htmlTemplateProcessed = waiverEmailTemplate
-    .replace('{{GUEST_NAME}}', data.guestName)
-    .replace('{{PROPERTY_ID}}', data.propertyId)
-    .replace('{{PDF_LIST}}', pdfListHtml)
-    .replace('{{ARCHERY_PIN}}', archeryPinHtml);
-
-  const { subject, from, body: bodyText } = parseEmailTemplate(textTemplateProcessed);
+  const emailData = buildEmailData(text, html);
+  emailData.to = data.guestEmail;
+  emailData.attachments = pdfs.map(p => ({
+    filename: p.filename,
+    content: btoa(String.fromCharCode(...new Uint8Array(p.bytes)))
+  }));
 
   try {
-    const { data: emailData, error } = await resend.emails.send({
-      from: `${from} <${env.EMAIL_FROM}>`,
-      to: data.guestEmail,
-      subject,
-      text: bodyText,
-      html: htmlTemplateProcessed,
-      attachments: pdfs.map(p => ({
-        filename: p.filename,
-        content: btoa(String.fromCharCode(...new Uint8Array(p.bytes)))
-      }))
-    });
-
-    if (error) {
-      console.error('Resend error:', error);
-      throw new Error(error.message);
-    }
-
-    console.log('Email sent successfully:', emailData);
+    const responseData = await sendEmail(resend, env, emailData);
+    console.log('Email sent successfully:', responseData);
   } catch (error) {
     console.error('Email send error:', error);
     throw new Error('Failed to send email: ' + error.message);

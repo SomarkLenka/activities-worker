@@ -9,6 +9,12 @@ import {
 } from './db.js';
 
 export async function htmlPage(env, submissionToken = null) {
+  // Helper function to encode data to base64
+  function encodeToBase64(data) {
+    const json = data === null || data === undefined ? 'null' : JSON.stringify(data);
+    return btoa(unescape(encodeURIComponent(json)));
+  }
+
   let submissionData = null;
 
   // If token provided, fetch submission details
@@ -44,17 +50,10 @@ export async function htmlPage(env, submissionToken = null) {
   // Fetch latest legal release
   const latestRelease = await getLatestRelease(env);
 
-  const propsJSON = JSON.stringify(propsData);
-  const props64 = btoa(unescape(encodeURIComponent(propsJSON)));
-
-  const risksJSON = JSON.stringify(risks);
-  const risks64 = btoa(unescape(encodeURIComponent(risksJSON)));
-
-  const submissionJSON = submissionData ? JSON.stringify(submissionData) : 'null';
-  const submission64 = btoa(unescape(encodeURIComponent(submissionJSON)));
-
-  const releaseJSON = latestRelease ? JSON.stringify(latestRelease) : 'null';
-  const release64 = btoa(unescape(encodeURIComponent(releaseJSON)));
+  const props64 = encodeToBase64(propsData);
+  const risks64 = encodeToBase64(risks);
+  const submission64 = encodeToBase64(submissionData);
+  const release64 = encodeToBase64(latestRelease);
 
   const bootstrapData = `
   let props = JSON.parse(atob('${props64}'));
