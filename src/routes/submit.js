@@ -1,4 +1,4 @@
-import { nanoid } from 'nanoid';
+import { nanoid } from '../utils/nanoid.js';
 import { json, bad } from '../utils/admin.js';
 import { validateSubmission } from '../services/validation.js';
 import { saveSubmission, saveDocuments } from '../services/storage.js';

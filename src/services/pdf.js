@@ -1,4 +1,4 @@
-import { nanoid } from 'nanoid';
+import { nanoid } from '../utils/nanoid.js';
 
 async function generateDocumentHash(data) {
   const hashInput = JSON.stringify({

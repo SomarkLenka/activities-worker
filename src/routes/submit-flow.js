@@ -1,4 +1,4 @@
-import { nanoid } from 'nanoid';
+import { nanoid } from '../utils/nanoid.js';
 import { makePDFs } from '../services/pdf.js';
 import { sendVerificationEmail, sendWaiverEmail } from '../services/mail.js';
 

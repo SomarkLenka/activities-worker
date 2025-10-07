@@ -1,4 +1,4 @@
-import { nanoid } from 'nanoid';
+import { nanoid } from '../utils/nanoid.js';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 
 async function generateDocumentHash(data) {

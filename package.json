@@ -10,7 +10,6 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "nanoid": "^5.1.6",
     "resend": "^6.1.1"
   }
 }
