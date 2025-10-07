@@ -21,7 +21,7 @@ export default {
     try {
       if (request.method === 'GET'  && pathname === '/')                      return await handleRoot(request, env);
       if (request.method === 'POST' && pathname === '/submit/initial')        return await handleInitialSubmit(request, env);
-      if (request.method === 'POST' && pathname === '/submit/complete')       return await handleCompleteSubmit(request, env);
+      if (request.method === 'POST' && pathname === '/submit/complete')       return await handleCompleteSubmit(request, env, ctx);
       if (request.method === 'GET'  && pathname === '/admin/search')          return await handleAdminSearch(request, env);
       if (request.method === 'GET'  && pathname === '/status')                return await handleStatus(env);
       
