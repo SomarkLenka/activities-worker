@@ -240,7 +240,17 @@ export async function makePDFs(data, subId, env) {
         throw new Error(`Browser rendering failed: ${response.status} ${response.statusText} - ${errorText}`);
       }
 
-      const { results: pdfResults } = await response.json();
+      const { results: pdfResults, failed } = await response.json();
+
+      // Check for any failures
+      if (failed > 0) {
+        const failedItems = pdfResults.filter(r => !r.success);
+        const failedActivities = failedItems.map(r => {
+          const item = batchItems.find(b => b.id === r.id);
+          return item?.act || r.id;
+        }).join(', ');
+        throw new Error(`Failed to generate PDFs for: ${failedActivities}`);
+      }
 
       // Save all PDFs to R2 concurrently
       const savePromises = pdfResults.map(async (result) => {
