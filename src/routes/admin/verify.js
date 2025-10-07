@@ -64,8 +64,10 @@ export async function handleAdminVerify(request, env) {
     }
 
     // Get activity info for label
-    const activities = await env.PROPS_KV.get(`property:${docData.property_id}:activities`, 'json') || [];
-    const activityInfo = activities.find(a => a.slug === docData.activity);
+    const activityResult = await env.waivers.prepare(
+      'SELECT label FROM activities WHERE property_id = ? AND slug = ?'
+    ).bind(docData.property_id, docData.activity).first();
+    const activityInfo = activityResult ? { label: activityResult.label } : null;
 
     // Construct signature key (deterministic from submission data)
     const nameParts = docData.guest_name.trim().split(/\s+/);

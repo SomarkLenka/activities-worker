@@ -26,14 +26,11 @@ export async function handleAdminActivities(request, env) {
 }
 
 async function getActivities(env, propertyId) {
-  const key = `property:${propertyId}:activities`;
-  const activities = await env.PROPS_KV.get(key, 'json');
+  const result = await env.waivers.prepare(
+    'SELECT slug, label, risk FROM activities WHERE property_id = ? ORDER BY label'
+  ).bind(propertyId).all();
 
-  if (!activities) {
-    return json({ ok: false, error: 'Property not found' }, 404);
-  }
-
-  return json({ ok: true, propertyId, activities });
+  return json({ ok: true, propertyId, activities: result.results || [] });
 }
 
 async function addActivity(request, env, propertyId) {
@@ -43,22 +40,23 @@ async function addActivity(request, env, propertyId) {
     return json({ ok: false, error: 'Must provide slug, label, and risk' }, 400);
   }
 
-  const key = `property:${propertyId}:activities`;
-  const activities = await env.PROPS_KV.get(key, 'json') || [];
+  const existingCheck = await env.waivers.prepare(
+    'SELECT id FROM activities WHERE property_id = ? AND slug = ?'
+  ).bind(propertyId, data.slug).first();
 
-  if (activities.find(a => a.slug === data.slug)) {
+  if (existingCheck) {
     return json({ ok: false, error: 'Activity with this slug already exists' }, 400);
   }
 
-  activities.push({
-    slug: data.slug,
-    label: data.label,
-    risk: data.risk
-  });
+  await env.waivers.prepare(
+    'INSERT INTO activities (property_id, slug, label, risk, created_at) VALUES (?, ?, ?, ?, ?)'
+  ).bind(propertyId, data.slug, data.label, data.risk, new Date().toISOString()).run();
 
-  await env.PROPS_KV.put(key, JSON.stringify(activities));
+  const result = await env.waivers.prepare(
+    'SELECT slug, label, risk FROM activities WHERE property_id = ? ORDER BY label'
+  ).bind(propertyId).all();
 
-  return json({ ok: true, propertyId, activities, added: data.slug });
+  return json({ ok: true, propertyId, activities: result.results || [], added: data.slug });
 }
 
 async function removeActivity(request, env, propertyId) {
@@ -68,18 +66,23 @@ async function removeActivity(request, env, propertyId) {
     return json({ ok: false, error: 'Must provide slug' }, 400);
   }
 
-  const key = `property:${propertyId}:activities`;
-  const activities = await env.PROPS_KV.get(key, 'json') || [];
+  const existingCheck = await env.waivers.prepare(
+    'SELECT id FROM activities WHERE property_id = ? AND slug = ?'
+  ).bind(propertyId, data.slug).first();
 
-  const filtered = activities.filter(a => a.slug !== data.slug);
-
-  if (filtered.length === activities.length) {
+  if (!existingCheck) {
     return json({ ok: false, error: 'Activity not found' }, 404);
   }
 
-  await env.PROPS_KV.put(key, JSON.stringify(filtered));
+  await env.waivers.prepare(
+    'DELETE FROM activities WHERE property_id = ? AND slug = ?'
+  ).bind(propertyId, data.slug).run();
 
-  return json({ ok: true, propertyId, activities: filtered, removed: data.slug });
+  const result = await env.waivers.prepare(
+    'SELECT slug, label, risk FROM activities WHERE property_id = ? ORDER BY label'
+  ).bind(propertyId).all();
+
+  return json({ ok: true, propertyId, activities: result.results || [], removed: data.slug });
 }
 
 async function updateActivity(request, env, propertyId) {
@@ -89,21 +92,38 @@ async function updateActivity(request, env, propertyId) {
     return json({ ok: false, error: 'Must provide slug' }, 400);
   }
 
-  const key = `property:${propertyId}:activities`;
-  const activities = await env.PROPS_KV.get(key, 'json') || [];
+  const existingCheck = await env.waivers.prepare(
+    'SELECT id FROM activities WHERE property_id = ? AND slug = ?'
+  ).bind(propertyId, data.slug).first();
 
-  const index = activities.findIndex(a => a.slug === data.slug);
-
-  if (index === -1) {
+  if (!existingCheck) {
     return json({ ok: false, error: 'Activity not found' }, 404);
   }
 
-  if (data.label) activities[index].label = data.label;
-  if (data.risk) activities[index].risk = data.risk;
+  const updates = [];
+  const bindings = [];
 
-  await env.PROPS_KV.put(key, JSON.stringify(activities));
+  if (data.label) {
+    updates.push('label = ?');
+    bindings.push(data.label);
+  }
+  if (data.risk) {
+    updates.push('risk = ?');
+    bindings.push(data.risk);
+  }
 
-  return json({ ok: true, propertyId, activities, updated: data.slug });
+  if (updates.length > 0) {
+    bindings.push(propertyId, data.slug);
+    await env.waivers.prepare(
+      `UPDATE activities SET ${updates.join(', ')} WHERE property_id = ? AND slug = ?`
+    ).bind(...bindings).run();
+  }
+
+  const result = await env.waivers.prepare(
+    'SELECT slug, label, risk FROM activities WHERE property_id = ? ORDER BY label'
+  ).bind(propertyId).all();
+
+  return json({ ok: true, propertyId, activities: result.results || [], updated: data.slug });
 }
 
 async function replaceAllActivities(request, env, propertyId) {
@@ -119,8 +139,20 @@ async function replaceAllActivities(request, env, propertyId) {
     }
   }
 
-  const key = `property:${propertyId}:activities`;
-  await env.PROPS_KV.put(key, JSON.stringify(data.activities));
+  await env.waivers.prepare(
+    'DELETE FROM activities WHERE property_id = ?'
+  ).bind(propertyId).run();
 
-  return json({ ok: true, propertyId, activities: data.activities });
+  const timestamp = new Date().toISOString();
+  for (const activity of data.activities) {
+    await env.waivers.prepare(
+      'INSERT INTO activities (property_id, slug, label, risk, created_at) VALUES (?, ?, ?, ?, ?)'
+    ).bind(propertyId, activity.slug, activity.label, activity.risk, timestamp).run();
+  }
+
+  const result = await env.waivers.prepare(
+    'SELECT slug, label, risk FROM activities WHERE property_id = ? ORDER BY label'
+  ).bind(propertyId).all();
+
+  return json({ ok: true, propertyId, activities: result.results || [] });
 }

@@ -19,50 +19,59 @@ export async function handleAdminRisks(request, env) {
 }
 
 async function getAllRisks(env) {
-  const levels = ['low', 'medium', 'high'];
-  const risks = {};
+  const result = await env.waivers.prepare(
+    'SELECT level, description FROM risk_descriptions'
+  ).all();
 
-  for (const level of levels) {
-    const key = `risk:${level}`;
-    const riskData = await env.PROPS_KV.get(key, 'json');
-    if (riskData) {
-      risks[level] = riskData;
-    }
+  const risks = {};
+  for (const row of (result.results || [])) {
+    risks[row.level] = { level: row.level, description: row.description };
   }
 
   return json({ ok: true, risks });
 }
 
 async function getRisk(env, level) {
-  const key = `risk:${level}`;
-  const riskData = await env.PROPS_KV.get(key, 'json');
+  const result = await env.waivers.prepare(
+    'SELECT level, description FROM risk_descriptions WHERE level = ?'
+  ).bind(level).first();
 
-  if (!riskData) {
+  if (!result) {
     return json({ ok: false, error: 'Risk level not found' }, 404);
   }
 
-  return json({ ok: true, risk: riskData });
+  return json({ ok: true, risk: { level: result.level, description: result.description } });
 }
 
 async function updateRisk(request, env) {
   const data = await request.json();
 
-  if (!data.level || !data.title || !data.description) {
-    return json({ ok: false, error: 'Must provide level, title, and description' }, 400);
+  if (!data.level || !data.description) {
+    return json({ ok: false, error: 'Must provide level and description' }, 400);
   }
 
   if (!['low', 'medium', 'high'].includes(data.level)) {
     return json({ ok: false, error: 'level must be low, medium, or high' }, 400);
   }
 
-  const key = `risk:${data.level}`;
+  const existingCheck = await env.waivers.prepare(
+    'SELECT level FROM risk_descriptions WHERE level = ?'
+  ).bind(data.level).first();
+
+  if (existingCheck) {
+    await env.waivers.prepare(
+      'UPDATE risk_descriptions SET description = ? WHERE level = ?'
+    ).bind(data.description, data.level).run();
+  } else {
+    await env.waivers.prepare(
+      'INSERT INTO risk_descriptions (level, description, created_at) VALUES (?, ?, ?)'
+    ).bind(data.level, data.description, new Date().toISOString()).run();
+  }
+
   const riskData = {
     level: data.level,
-    title: data.title,
     description: data.description
   };
-
-  await env.PROPS_KV.put(key, JSON.stringify(riskData));
 
   return json({ ok: true, risk: riskData });
 }

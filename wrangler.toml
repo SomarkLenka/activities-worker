@@ -17,11 +17,6 @@ ARCHERY_PIN   = "1234"
 EMAIL_FROM    = "noreply@waivers.rtxsecured.com"
 DEV_MODE      = "false"                 # Set to "false" in production
 
-[[kv_namespaces]]
-binding = "PROPS_KV"
-id      = "aec4d5d52a9e41d6925a94a1d1b27207"             # production namespace
-preview_id = "6c095813078c4fb581dfd74fd2fdeda7"          # DEV_PROPS_KV for local development
-
 [[r2_buckets]]
 binding     = "WAIVERS_R2"
 bucket_name = "waivers"                 # production bucket
@@ -30,6 +25,9 @@ preview_bucket_name = "dev-waivers"     # development bucket for local testing
 [[d1_databases]]
 binding        = "waivers"
 database_name  = "waivers"
-database_id    = "0846e6ed-6eea-4b4f-a8dd-f9b9b232430e"  
+database_id    = "0846e6ed-6eea-4b4f-a8dd-f9b9b232430e"
 preview_database_id = "a26bc6c3-64d9-45ab-80c8-8a10be058c27"           # replace after `wrangler d1 create`
+
+[browser]
+binding = "BROWSER"
 

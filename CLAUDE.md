@@ -40,10 +40,10 @@ This is a **Cloudflare Workers-based digital waiver management system** for rent
 - The D1 database binding is named `waivers` (not `DB`)
 - Always use `env.waivers.prepare()` for database queries
 
-### 2. KV Namespace Setup
-- **Production**: `PROPS_KV` with id in wrangler.toml
-- **Development**: `DEV_PROPS_KV` with preview_id in wrangler.toml
-- Must populate with property data before testing
+### 2. Property and Activity Configuration
+- Stored in D1 database tables: `properties`, `activities`, `risk_descriptions`
+- No longer uses KV namespace (migrated to database in October 2025)
+- Manage via admin panel or direct database queries
 
 ### 3. PDF Generation
 - Uses **pdf-lib** for programmatic PDF creation
@@ -81,10 +81,11 @@ wrangler d1 execute waivers --local --file=migrations/0001_init.sql
 ```
 
 ### Issue: Activities not displaying
-**Cause**: KV namespace not populated with property data
+**Cause**: Database not populated with property/activity data
 **Solution**:
 ```bash
-wrangler kv key put --binding=PROPS_KV props '[...]' --preview
+wrangler d1 execute waivers --remote --file=migrations/0002_properties_activities.sql
+wrangler d1 execute waivers --remote --file=migrations/0003_seed_data.sql
 ```
 
 ### Issue: PDF signature not displaying
@@ -138,10 +139,14 @@ When testing the full flow:
 
 ## Deployment Process
 
-1. Initialize remote database: `wrangler d1 execute waivers --remote --file=migrations/0001_init.sql`
-2. Populate KV namespace with property data
-3. Set Resend API key: `wrangler secret put RESEND_API_KEY`
-4. Deploy main worker: `wrangler deploy`
+1. Initialize remote database:
+   ```bash
+   wrangler d1 execute waivers --remote --file=migrations/0001_schema.sql
+   wrangler d1 execute waivers --remote --file=migrations/0002_properties_activities.sql
+   wrangler d1 execute waivers --remote --file=migrations/0003_seed_data.sql
+   ```
+2. Set Resend API key: `wrangler secret put RESEND_API_KEY`
+3. Deploy main worker: `wrangler deploy`
 
 ## Important Commands
 
@@ -155,11 +160,15 @@ wrangler tail
 # Set Resend API key
 wrangler secret put RESEND_API_KEY
 
-# Update KV data
-wrangler kv key put --binding=PROPS_KV props '[...]' --preview
+# Database migrations (local)
+wrangler d1 execute waivers --local --file=migrations/0001_schema.sql
+wrangler d1 execute waivers --local --file=migrations/0002_properties_activities.sql
+wrangler d1 execute waivers --local --file=migrations/0003_seed_data.sql
 
-# Database migrations
-wrangler d1 execute waivers --local --file=migrations/0001_init.sql
+# Database migrations (production)
+wrangler d1 execute waivers --remote --file=migrations/0001_schema.sql
+wrangler d1 execute waivers --remote --file=migrations/0002_properties_activities.sql
+wrangler d1 execute waivers --remote --file=migrations/0003_seed_data.sql
 
 # Deploy to production
 wrangler deploy
@@ -167,6 +176,14 @@ wrangler deploy
 
 ## Recent Changes (Latest Session)
 
+### October 2025 - KV to Database Migration
+- Migrated property and activity configuration from KV namespace to D1 database
+- Added new database tables: `properties`, `activities`, `risk_descriptions`
+- Updated all routes and services to query database instead of KV
+- Removed KV namespace bindings from wrangler.toml
+- Created migration scripts for seamless data transfer
+
+### Previous Changes
 - Replaced Cloudflare Browser Rendering with pdf-lib for in-memory PDF generation
 - Consolidated email functionality into main worker using Resend API
 - Removed browser-worker and email-worker service dependencies
@@ -178,7 +195,7 @@ wrangler deploy
 
 1. **Email Service**: Currently uses Resend API directly. Could be migrated to queue-based system for better reliability at scale.
 
-2. **Activity Configuration**: Activities are currently hardcoded in KV. Consider adding admin interface for dynamic management.
+2. **Activity Configuration**: Activities are now stored in D1 database with admin panel for management. Can be enhanced with drag-and-drop reordering and bulk import/export features.
 
 3. **PDF Templates**: PDF layout in pdf.js could be enhanced with more sophisticated formatting, multi-page support, and custom fonts.
 
@@ -190,5 +207,6 @@ wrangler deploy
 
 ---
 
-*Last Updated: 2025-10-01*
+*Last Updated: 2025-10-07*
 *This document helps AI assistants understand the codebase structure, common issues, and development patterns.*
+- No need to use wrangler deploy, simply commit changes and push to main

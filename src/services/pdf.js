@@ -1,8 +1,6 @@
 import { nanoid } from 'nanoid';
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 
 async function generateDocumentHash(data) {
-  // Create a deterministic string from all verifiable data
   const hashInput = JSON.stringify({
     submission_id: data.submission_id,
     property_id: data.property_id,
@@ -27,38 +25,132 @@ async function generateDocumentHash(data) {
   return hashHex;
 }
 
-function wrapText(text, maxWidth, font, fontSize) {
-  // First, split by newlines to preserve intentional line breaks
-  const paragraphs = text.replace(/\r\n/g, '\n').split('\n');
-  const lines = [];
+function generateWaiverHTML(data, activityInfo, riskData, latestRelease, documentId, documentHash) {
+  const riskLevel = activityInfo?.risk || 'medium';
 
-  for (const paragraph of paragraphs) {
-    if (!paragraph.trim()) {
-      lines.push('');
-      continue;
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    @page {
+      size: A4;
+      margin: 1in;
     }
 
-    const words = paragraph.split(' ');
-    let currentLine = '';
-
-    for (const word of words) {
-      const testLine = currentLine ? currentLine + ' ' + word : word;
-      const testWidth = font.widthOfTextAtSize(testLine, fontSize);
-
-      if (testWidth <= maxWidth) {
-        currentLine = testLine;
-      } else {
-        if (currentLine) lines.push(currentLine);
-        currentLine = word;
-      }
+    body {
+      font-family: 'Helvetica', 'Arial', sans-serif;
+      font-size: 11pt;
+      line-height: 1.6;
+      color: #000;
+      margin: 0;
+      padding: 20px;
     }
-    if (currentLine) lines.push(currentLine);
-  }
 
-  return lines;
+    h1 {
+      font-size: 20pt;
+      font-weight: bold;
+      margin-bottom: 30px;
+      text-transform: uppercase;
+    }
+
+    .details {
+      margin-bottom: 30px;
+      line-height: 2;
+    }
+
+    .risk-section {
+      margin: 30px 0;
+    }
+
+    .risk-level {
+      font-weight: bold;
+      font-size: 12pt;
+      margin-bottom: 10px;
+    }
+
+    .risk-description {
+      color: #4a4a4a;
+      font-size: 10pt;
+      margin-bottom: 20px;
+    }
+
+    .waiver-section {
+      margin: 30px 0;
+    }
+
+    .waiver-title {
+      font-weight: bold;
+      font-size: 12pt;
+      margin-bottom: 10px;
+    }
+
+    .waiver-text {
+      font-size: 9pt;
+      line-height: 1.5;
+      white-space: pre-wrap;
+    }
+
+    .signature-section {
+      margin-top: 40px;
+      page-break-inside: avoid;
+    }
+
+    .signature-label {
+      font-size: 12pt;
+      margin-bottom: 10px;
+    }
+
+    .signature-image {
+      max-width: 400px;
+      max-height: 150px;
+    }
+
+    .footer {
+      position: fixed;
+      bottom: 0.5in;
+      right: 1in;
+      text-align: right;
+      font-size: 7pt;
+      color: #808080;
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+  <h1>${data.activity.toUpperCase()} — Release of Liability</h1>
+
+  <div class="details">
+    Property  : ${data.propertyId}<br>
+    Check-in  : ${data.checkinDate}<br>
+    Guest     : ${data.guestName}<br>
+    Initials  : ${data.initials[data.activity]}
+  </div>
+
+  <div class="risk-section">
+    <div class="risk-level">Risk Level: ${riskLevel.toUpperCase()}</div>
+    ${riskData?.description ? `<div class="risk-description">${riskData.description}</div>` : ''}
+  </div>
+
+  <div class="waiver-section">
+    <div class="waiver-title">Waiver and Release:</div>
+    <div class="waiver-text">${latestRelease.waiver_text}</div>
+  </div>
+
+  <div class="signature-section">
+    <div class="signature-label">Signature:</div>
+    ${data.signature ? `<img src="${data.signature}" class="signature-image" />` : '<p style="color: #808080;">No signature provided</p>'}
+  </div>
+
+  <div class="footer">
+    Legal Version ${latestRelease.version} (${latestRelease.release_date}) • Document ID: ${documentId}<br>
+    Verification Hash: ${documentHash.substring(0, 32)}...
+  </div>
+</body>
+</html>`;
 }
 
-export async function makePDFs (data, subId, env) {
+export async function makePDFs(data, subId, env) {
   const now = new Date();
   const createdAt = now.toISOString();
   const y = now.getUTCFullYear();
@@ -74,14 +166,19 @@ export async function makePDFs (data, subId, env) {
     throw new Error('No legal release found. Please create a release in the admin panel first.');
   }
 
-  // Fetch activity info and risk descriptions from KV
-  const activities = await env.PROPS_KV.get(`property:${data.propertyId}:activities`, 'json') || [];
+  // Fetch activity info from database
+  const activitiesResult = await env.waivers.prepare(
+    'SELECT slug, label, risk FROM activities WHERE property_id = ?'
+  ).bind(data.propertyId).all();
+  const activities = activitiesResult.results || [];
+
+  // Fetch risk descriptions from database
+  const risksResult = await env.waivers.prepare(
+    'SELECT level, description FROM risk_descriptions'
+  ).all();
   const risks = {};
-  for (const level of ['low', 'medium', 'high']) {
-    const riskData = await env.PROPS_KV.get(`risk:${level}`, 'json');
-    if (riskData) {
-      risks[level] = riskData;
-    }
+  for (const row of (risksResult.results || [])) {
+    risks[row.level] = { description: row.description };
   }
 
   // Save signature to R2 (once per submission, not per activity)
@@ -91,7 +188,6 @@ export async function makePDFs (data, subId, env) {
       const signatureData = data.signature.split(',')[1];
       const signatureBytes = Uint8Array.from(atob(signatureData), c => c.charCodeAt(0));
 
-      // Extract first and last name
       const nameParts = data.guestName.trim().split(/\s+/);
       const firstName = nameParts[0]?.toLowerCase().replace(/[^a-z]/g, '') || 'unknown';
       const lastName = nameParts.length > 1
@@ -114,156 +210,7 @@ export async function makePDFs (data, subId, env) {
     const activityInfo = activities.find(a => a.slug === act);
     const riskLevel = activityInfo?.risk || 'medium';
     const riskData = risks[riskLevel];
-    const pdfDoc = await PDFDocument.create();
-    const page = pdfDoc.addPage([595, 842]); // A4 size in points
-    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-    const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-    const { width, height } = page.getSize();
-    const leftMargin = 50;
-    const rightMargin = 50;
-    const bottomMargin = 80;
-    const textWidth = width - leftMargin - rightMargin;
-    let yPos = height - 80;
-    let currentPage = page;
-
-    // Helper function to check if we need a new page
-    const checkNewPage = (requiredSpace) => {
-      if (yPos - requiredSpace < bottomMargin) {
-        currentPage = pdfDoc.addPage([595, 842]);
-        yPos = height - 80;
-        return true;
-      }
-      return false;
-    };
-
-    /* ----- Title -------------------------------------------------- */
-    checkNewPage(60);
-    currentPage.drawText(`${act.toUpperCase()} — Release of Liability`, {
-      x: leftMargin,
-      y: yPos,
-      size: 20,
-      font: boldFont,
-      color: rgb(0, 0, 0),
-    });
-
-    yPos -= 60;
-
-    /* ----- Property details --------------------------------------- */
-    const details = [
-      `Property  : ${data.propertyId}`,
-      `Check-in  : ${data.checkinDate}`,
-      `Guest     : ${data.guestName}`,
-      `Initials  : ${data.initials[act]}`
-    ];
-
-    for (const detail of details) {
-      checkNewPage(25);
-      currentPage.drawText(detail, {
-        x: leftMargin,
-        y: yPos,
-        size: 12,
-        font,
-        color: rgb(0, 0, 0),
-      });
-      yPos -= 25;
-    }
-
-    /* ----- Risk acknowledgment and waiver text ------------------- */
-    yPos -= 20;
-
-    // Risk level
-    checkNewPage(40);
-    const riskLabel = `Risk Level: ${riskLevel.toUpperCase()}`;
-    currentPage.drawText(riskLabel, {
-      x: leftMargin,
-      y: yPos,
-      size: 12,
-      font: boldFont,
-      color: rgb(0, 0, 0),
-    });
-    yPos -= 20;
-
-    if (riskData?.description) {
-      const riskDesc = wrapText(riskData.description, textWidth, font, 10);
-      for (const line of riskDesc) {
-        checkNewPage(15);
-        currentPage.drawText(line, {
-          x: leftMargin,
-          y: yPos,
-          size: 10,
-          font,
-          color: rgb(0.3, 0.3, 0.3),
-        });
-        yPos -= 15;
-      }
-    }
-
-    yPos -= 15;
-
-    // Legal waiver text from release
-    checkNewPage(40);
-    currentPage.drawText('Waiver and Release:', {
-      x: leftMargin,
-      y: yPos,
-      size: 12,
-      font: boldFont,
-      color: rgb(0, 0, 0),
-    });
-    yPos -= 20;
-
-    const waiverLines = wrapText(latestRelease.waiver_text, textWidth, font, 9);
-    for (const line of waiverLines) {
-      checkNewPage(14);
-      currentPage.drawText(line, {
-        x: leftMargin,
-        y: yPos,
-        size: 9,
-        font,
-        color: rgb(0, 0, 0),
-      });
-      yPos -= 14;
-    }
-
-    /* ----- Signature image ---------------------------------------- */
-    yPos -= 20;
-    checkNewPage(120);
-    currentPage.drawText('Signature:', {
-      x: leftMargin,
-      y: yPos,
-      size: 12,
-      font,
-      color: rgb(0, 0, 0),
-    });
-    yPos -= 10;
-
-    if (data.signature) {
-      try {
-        const signatureData = data.signature.split(',')[1];
-        const signatureBytes = Uint8Array.from(atob(signatureData), c => c.charCodeAt(0));
-        const signatureImage = await pdfDoc.embedPng(signatureBytes);
-
-        const signatureDims = signatureImage.scale(0.5);
-        currentPage.drawImage(signatureImage, {
-          x: leftMargin,
-          y: yPos - signatureDims.height,
-          width: signatureDims.width,
-          height: signatureDims.height,
-        });
-      } catch (err) {
-        console.error('Error embedding signature:', err);
-        currentPage.drawText('[Signature image could not be embedded]', {
-          x: leftMargin,
-          y: yPos - 20,
-          size: 10,
-          font,
-          color: rgb(0.5, 0.5, 0.5),
-        });
-      }
-    }
-
-    /* ----- Generate verification hash ----------------------------- */
-    // Extract first and last name (same logic as signature)
     const nameParts = data.guestName.trim().split(/\s+/);
     const firstName = nameParts[0]?.toLowerCase().replace(/[^a-z]/g, '') || 'unknown';
     const lastName = nameParts.length > 1
@@ -289,36 +236,43 @@ export async function makePDFs (data, subId, env) {
 
     const documentHash = await generateDocumentHash(hashData);
 
-    /* ----- Footer ------------------------------------------------- */
-    // Add footer to the last page (currentPage) at bottom right
-    const versionText = `Legal Version ${latestRelease.version} (${latestRelease.release_date}) • Document ID: ${documentId}`;
-    const hashText = `Verification Hash: ${documentHash.substring(0, 32)}...`;
+    // Generate HTML for this activity
+    const htmlContent = generateWaiverHTML(
+      { ...data, activity: act },
+      activityInfo,
+      riskData,
+      latestRelease,
+      documentId,
+      documentHash
+    );
 
-    const versionWidth = font.widthOfTextAtSize(versionText, 7);
-    const hashWidth = font.widthOfTextAtSize(hashText, 7);
+    // Use Cloudflare Browser Rendering to generate PDF
+    let pdfBytes;
+    try {
+      const browser = await env.BROWSER.launch();
+      const page = await browser.newPage();
+      await page.setContent(htmlContent, { waitUntil: 'networkidle' });
 
-    currentPage.drawText(versionText, {
-      x: width - rightMargin - versionWidth,
-      y: 40,
-      size: 7,
-      font,
-      color: rgb(0.5, 0.5, 0.5),
-    });
+      pdfBytes = await page.pdf({
+        format: 'A4',
+        printBackground: true,
+        margin: {
+          top: '1in',
+          right: '1in',
+          bottom: '1in',
+          left: '1in'
+        }
+      });
 
-    currentPage.drawText(hashText, {
-      x: width - rightMargin - hashWidth,
-      y: 28,
-      size: 7,
-      font,
-      color: rgb(0.5, 0.5, 0.5),
-    });
+      await browser.close();
+    } catch (err) {
+      console.error('Error generating PDF with browser rendering:', err);
+      throw new Error(`Failed to generate PDF for activity ${act}: ${err.message}`);
+    }
 
-    const pdfBytes = await pdfDoc.save();
-
-    /* ----- Save to R2 --------------------------------------------- */
+    // Save to R2
     const filename = `${lastName}-${firstName}-${subId}.pdf`;
-    const key      = `waivers/${y}/${m}/${d}/${data.propertyId}/${act}/` +
-                     `${lastName}-${firstName}-${subId}.pdf`;
+    const key = `waivers/${y}/${m}/${d}/${data.propertyId}/${act}/${lastName}-${firstName}-${subId}.pdf`;
 
     await env.WAIVERS_R2.put(key, pdfBytes, {
       httpMetadata: { contentType: 'application/pdf' }

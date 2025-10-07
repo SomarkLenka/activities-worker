@@ -21,10 +21,11 @@ export async function handleAdminProperties(request, env) {
 }
 
 async function getProperties(env) {
-  const propertiesJSON = await env.PROPS_KV.get('properties', 'text');
-  const properties = propertiesJSON ? JSON.parse(propertiesJSON) : [];
+  const result = await env.waivers.prepare(
+    'SELECT id, name FROM properties ORDER BY name'
+  ).all();
 
-  return json({ ok: true, properties });
+  return json({ ok: true, properties: result.results || [] });
 }
 
 async function addProperty(request, env) {
@@ -34,30 +35,35 @@ async function addProperty(request, env) {
     return json({ ok: false, error: 'Must provide id and name' }, 400);
   }
 
-  const propertiesJSON = await env.PROPS_KV.get('properties', 'text');
-  const properties = propertiesJSON ? JSON.parse(propertiesJSON) : [];
+  const existingCheck = await env.waivers.prepare(
+    'SELECT id FROM properties WHERE id = ?'
+  ).bind(data.id).first();
 
-  if (properties.find(p => p.id === data.id)) {
+  if (existingCheck) {
     return json({ ok: false, error: 'Property with this ID already exists' }, 400);
   }
 
-  properties.push({
-    id: data.id,
-    name: data.name
-  });
+  await env.waivers.prepare(
+    'INSERT INTO properties (id, name, created_at) VALUES (?, ?, ?)'
+  ).bind(data.id, data.name, new Date().toISOString()).run();
 
-  await env.PROPS_KV.put('properties', JSON.stringify(properties));
-
-  // Initialize activities for new property
-  let activities = [];
   if (data.copyDefaultActivities) {
-    // Copy from default template
-    activities = await env.PROPS_KV.get('template:default-activities', 'json') || [];
+    const defaultActivities = await env.waivers.prepare(
+      'SELECT slug, label, risk FROM activities WHERE property_id = (SELECT id FROM properties LIMIT 1)'
+    ).all();
+
+    for (const activity of (defaultActivities.results || [])) {
+      await env.waivers.prepare(
+        'INSERT INTO activities (property_id, slug, label, risk, created_at) VALUES (?, ?, ?, ?, ?)'
+      ).bind(data.id, activity.slug, activity.label, activity.risk, new Date().toISOString()).run();
+    }
   }
 
-  await env.PROPS_KV.put(`property:${data.id}:activities`, JSON.stringify(activities));
+  const result = await env.waivers.prepare(
+    'SELECT id, name FROM properties ORDER BY name'
+  ).all();
 
-  return json({ ok: true, properties, added: data.id });
+  return json({ ok: true, properties: result.results || [], added: data.id });
 }
 
 async function removeProperty(request, env) {
@@ -67,24 +73,29 @@ async function removeProperty(request, env) {
     return json({ ok: false, error: 'Must provide id' }, 400);
   }
 
-  const propertiesJSON = await env.PROPS_KV.get('properties', 'text');
-  const properties = propertiesJSON ? JSON.parse(propertiesJSON) : [];
+  const countResult = await env.waivers.prepare(
+    'SELECT COUNT(*) as count FROM properties'
+  ).first();
 
-  // Prevent deletion if only one property left
-  if (properties.length <= 1) {
+  if (countResult.count <= 1) {
     return json({ ok: false, error: 'Cannot delete the last property' }, 400);
   }
 
-  const filtered = properties.filter(p => p.id !== data.id);
+  const existingCheck = await env.waivers.prepare(
+    'SELECT id FROM properties WHERE id = ?'
+  ).bind(data.id).first();
 
-  if (filtered.length === properties.length) {
+  if (!existingCheck) {
     return json({ ok: false, error: 'Property not found' }, 404);
   }
 
-  await env.PROPS_KV.put('properties', JSON.stringify(filtered));
+  await env.waivers.prepare(
+    'DELETE FROM properties WHERE id = ?'
+  ).bind(data.id).run();
 
-  // Clean up property activities
-  await env.PROPS_KV.delete(`property:${data.id}:activities`);
+  const result = await env.waivers.prepare(
+    'SELECT id, name FROM properties ORDER BY name'
+  ).all();
 
-  return json({ ok: true, properties: filtered, removed: data.id });
+  return json({ ok: true, properties: result.results || [], removed: data.id });
 }

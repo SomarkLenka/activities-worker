@@ -13,7 +13,9 @@
     "fflate": "^0.8.2",
     "mimetext": "^3.0.27",
     "nanoid": "^5.1.6",
-    "pdf-lib": "^1.17.1",
     "resend": "^6.1.1"
+  },
+  "devDependencies": {
+    "pdf-lib": "^1.17.1"
   }
 }

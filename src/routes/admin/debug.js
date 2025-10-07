@@ -8,35 +8,11 @@ export async function handleAdminDebug(request, env) {
   const forceRefresh = url.searchParams.get('refresh') === 'true';
 
   try {
-    // Check cache first unless force refresh
-    if (!forceRefresh) {
-      const cached = await env.PROPS_KV.get(CACHE_KEY, 'json');
-      if (cached && cached.timestamp) {
-        const age = Date.now() - cached.timestamp;
-        if (age < CACHE_DURATION) {
-          return json({
-            ok: true,
-            lastUpdate: new Date(cached.timestamp).toISOString(),
-            kv: cached.kv,
-            d1: cached.d1
-          });
-        }
-      }
-    }
-
-    // Fetch fresh data
+    // Fetch fresh data from database
     const debugData = {
       timestamp: Date.now(),
-      kv: {},
       d1: {}
     };
-
-    // Get all KV keys
-    const kvList = await env.PROPS_KV.list();
-    for (const key of kvList.keys) {
-      const value = await env.PROPS_KV.get(key.name, 'json');
-      debugData.kv[key.name] = value;
-    }
 
     // Get all D1 tables
     const tables = await env.waivers.prepare(
@@ -62,13 +38,9 @@ export async function handleAdminDebug(request, env) {
       };
     }
 
-    // Cache the data
-    await env.PROPS_KV.put(CACHE_KEY, JSON.stringify(debugData));
-
     return json({
       ok: true,
       lastUpdate: new Date(debugData.timestamp).toISOString(),
-      kv: debugData.kv,
       d1: debugData.d1
     });
 
