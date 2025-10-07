@@ -13,10 +13,8 @@ export async function saveDocuments(env, subId, pdfInfos) {
   const now = new Date().toISOString();
 
   for (const p of pdfInfos) {
-    // Insert document (for backward compatibility)
     await createDocument(env, p.id, subId, p.activity, p.r2Key, p.initials);
 
-    // Insert hash (for backward compatibility)
     const hashId = `hash_${p.id}`;
     await createHash(env, hashId, p.id, p.hash, now);
   }

@@ -1,6 +1,3 @@
-// In-house nanoid implementation
-// Generates cryptographically secure random IDs
-
 const urlAlphabet = 'useandom26T198340PX75pxJACKVERYMINDBUSHWOLF_GQZbfghjklqvwyzrict';
 
 export function nanoid(size = 21) {

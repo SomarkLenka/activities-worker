@@ -1,7 +1,3 @@
-// Database query utilities
-// Centralized database access layer for D1 database operations
-
-// Submissions
 export async function getSubmissionByToken(env, verificationToken) {
   return await env.waivers.prepare(
     'SELECT submission_id, property_id, checkin_date, guest_name, guest_email, status, token_expires_at FROM submissions WHERE verification_token = ?'
@@ -48,7 +44,6 @@ export async function updateSubmissionActivities(env, submissionId, activities) 
   ).bind(JSON.stringify(activities), submissionId).run();
 }
 
-// Properties
 export async function getAllProperties(env, excludeDefault = true) {
   if (excludeDefault) {
     const result = await env.waivers.prepare(
@@ -80,7 +75,6 @@ export async function deleteProperty(env, id) {
   ).bind(id).run();
 }
 
-// Activities
 export async function getActivitiesByProperty(env, propertyId) {
   const result = await env.waivers.prepare(
     'SELECT slug, label, risk FROM activities WHERE property_id = ? ORDER BY label'
@@ -119,7 +113,6 @@ export async function copyActivitiesFromDefault(env, targetPropertyId) {
   }
 }
 
-// Risk Descriptions
 export async function getAllRiskDescriptions(env) {
   const result = await env.waivers.prepare(
     'SELECT level, description FROM risk_descriptions'
@@ -137,7 +130,6 @@ export async function updateRiskDescription(env, level, description) {
   ).bind(level, description).run();
 }
 
-// Legal Releases
 export async function getLatestRelease(env) {
   return await env.waivers.prepare(
     'SELECT version, release_date, waiver_text FROM releases ORDER BY release_date DESC, version DESC LIMIT 1'
@@ -157,7 +149,6 @@ export async function createRelease(env, version, releaseDate, waiverText) {
   ).bind(version, releaseDate, waiverText).run();
 }
 
-// Documents (legacy)
 export async function getDocumentById(env, documentId) {
   return await env.waivers.prepare(
     'SELECT * FROM documents WHERE document_id = ?'
@@ -177,7 +168,6 @@ export async function createDocument(env, documentId, submissionId, activity, r2
   ).bind(documentId, submissionId, activity, r2Key, initials).run();
 }
 
-// Document Hashes (legacy)
 export async function createHash(env, hashId, documentId, hashValue, createdAt) {
   return await env.waivers.prepare(
     'INSERT INTO hashes (hash_id, document_id, hash_value, created_at) VALUES (?, ?, ?, ?)'
@@ -190,7 +180,6 @@ export async function getHashByDocument(env, documentId) {
   ).bind(documentId).first();
 }
 
-// Submission Activities (new structure)
 export async function createSubmissionActivity(env, activityId, verificationToken, activitySlug, activityLabel, initials, documentHash, r2Key, createdAt) {
   return await env.waivers.prepare(
     `INSERT INTO submission_activities
@@ -215,7 +204,6 @@ export async function getSubmissionActivitiesByToken(env, verificationToken) {
   return result.results || [];
 }
 
-// Search
 export async function searchSubmissions(env, whereClause, params) {
   const query = `
     SELECT * FROM submissions

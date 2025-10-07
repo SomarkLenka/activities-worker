@@ -71,20 +71,16 @@ export async function makePDFs(data, subId, env) {
   const m = String(now.getUTCMonth() + 1).padStart(2, '0');
   const d = String(now.getUTCDate()).padStart(2, '0');
 
-  // Fetch latest legal release
   const latestRelease = await getLatestRelease(env);
 
   if (!latestRelease) {
     throw new Error('No legal release found. Please create a release in the admin panel first.');
   }
 
-  // Fetch activity info from database
   const activities = await getActivitiesByProperty(env, data.propertyId);
 
-  // Fetch risk descriptions from database
   const risks = await getAllRiskDescriptions(env);
 
-  // Save signature to R2 (once per submission, not per activity)
   let signatureKey = null;
   if (data.signature) {
     try {
@@ -105,7 +101,6 @@ export async function makePDFs(data, subId, env) {
 
   const { firstName, lastName } = parseGuestName(data.guestName);
 
-  // Pre-generate all hashes concurrently
   const hashPromises = data.activities.map(async (act) => {
     const activityInfo = activities.find(a => a.slug === act);
     const hashData = {
@@ -130,9 +125,7 @@ export async function makePDFs(data, subId, env) {
 
   const results = [];
 
-  // Hybrid approach: single vs batch
   if (data.activities.length === 1) {
-    // SINGLE MODE - one activity
     const act = data.activities[0];
     const activityInfo = activities.find(a => a.slug === act);
     const riskLevel = activityInfo?.risk || 'medium';
@@ -169,7 +162,6 @@ export async function makePDFs(data, subId, env) {
 
       const pdfBytes = await response.arrayBuffer();
 
-      // Save to R2
       const filename = `${lastName}-${firstName}-${act}-${subId}.pdf`;
       const key = `waivers/${y}/${m}/${d}/${data.propertyId}/${act}/${filename}`;
 
@@ -193,9 +185,6 @@ export async function makePDFs(data, subId, env) {
     }
 
   } else {
-    // BATCH MODE - multiple activities
-
-    // Build all HTML content
     const batchItems = data.activities.map((act) => {
       const activityInfo = activities.find(a => a.slug === act);
       const riskLevel = activityInfo?.risk || 'medium';
@@ -225,7 +214,6 @@ export async function makePDFs(data, subId, env) {
     });
 
     try {
-      // Single batch call with concurrency hint
       const response = await env.BROWSER.fetch('https://render', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -242,7 +230,6 @@ export async function makePDFs(data, subId, env) {
 
       const { results: pdfResults, failed } = await response.json();
 
-      // Check for any failures
       if (failed > 0) {
         const failedItems = pdfResults.filter(r => !r.success);
         const failedActivities = failedItems.map(r => {
@@ -252,13 +239,11 @@ export async function makePDFs(data, subId, env) {
         throw new Error(`Failed to generate PDFs for: ${failedActivities}`);
       }
 
-      // Save all PDFs to R2 concurrently
       const savePromises = pdfResults.map(async (result) => {
         const batchItem = batchItems.find(b => b.id === result.id);
         const filename = `${lastName}-${firstName}-${batchItem.act}-${subId}.pdf`;
         const key = `waivers/${y}/${m}/${d}/${data.propertyId}/${batchItem.act}/${filename}`;
 
-        // Decode base64 PDF
         const pdfBytes = Uint8Array.from(atob(result.pdf), c => c.charCodeAt(0));
 
         await env.WAIVERS_R2.put(key, pdfBytes, {
