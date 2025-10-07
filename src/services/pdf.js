@@ -249,26 +249,20 @@ export async function makePDFs(data, subId, env) {
     // Use Cloudflare Browser Rendering via service binding
     let pdfBytes;
     try {
-      const response = await env.BROWSER.fetch('https://renderer/pdf', {
+      // Create a data URL with the HTML content
+      const htmlDataUrl = `data:text/html;base64,${btoa(unescape(encodeURIComponent(htmlContent)))}`;
+
+      const response = await env.BROWSER.fetch('https://renderer/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          html: htmlContent,
-          options: {
-            format: 'A4',
-            printBackground: true,
-            margin: {
-              top: '1in',
-              right: '1in',
-              bottom: '1in',
-              left: '1in'
-            }
-          }
+          url: htmlDataUrl
         })
       });
 
       if (!response.ok) {
-        throw new Error(`Browser rendering failed: ${response.status} ${response.statusText}`);
+        const errorText = await response.text();
+        throw new Error(`Browser rendering failed: ${response.status} ${response.statusText} - ${errorText}`);
       }
 
       pdfBytes = await response.arrayBuffer();
