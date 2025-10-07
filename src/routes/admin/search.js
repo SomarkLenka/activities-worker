@@ -31,9 +31,31 @@ export async function handleAdminSearch(request, env) {
     params.push(`%${qDate}%`);
   }
 
+  // If searching by activity, we need to join with submission_activities table
   if (qActivity) {
-    conditions.push('activities LIKE ?');
-    params.push(`%${qActivity}%`);
+    // Build query to join with submission_activities
+    const baseConditions = conditions.slice(); // Copy existing conditions
+    const baseParams = params.slice();
+
+    const whereClause = baseConditions.length > 0
+      ? `WHERE ${baseConditions.join(' AND ')}`
+      : '';
+
+    const query = `
+      SELECT DISTINCT s.*
+      FROM submissions s
+      LEFT JOIN submission_activities sa ON s.verification_token = sa.verification_token
+      ${whereClause}
+      ${baseConditions.length > 0 ? 'AND' : 'WHERE'} (
+        s.activities LIKE ? OR sa.activity_slug LIKE ?
+      )
+      ORDER BY s.created_at DESC
+      LIMIT 200
+    `;
+
+    const allParams = [...baseParams, `%${qActivity}%`, `%${qActivity}%`];
+    const rows = await env.waivers.prepare(query).bind(...allParams).all();
+    return json({ rows });
   }
 
   const whereClause = conditions.length > 0

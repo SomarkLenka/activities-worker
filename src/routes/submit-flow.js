@@ -1,6 +1,7 @@
 import { nanoid } from '../utils/nanoid.js';
 import { makePDFs } from '../services/pdf.js';
 import { sendVerificationEmail, sendWaiverEmail } from '../services/mail.js';
+import { saveSubmissionActivities, saveDocuments } from '../services/storage.js';
 
 export async function handleInitialSubmit(request, env) {
   try {
@@ -106,12 +107,11 @@ export async function handleCompleteSubmit(request, env) {
       });
     }
 
-    // Update submission with activities
+    // Update submission status
     const completedAt = new Date().toISOString();
     await env.waivers.prepare(
-      'UPDATE submissions SET activities = ?, status = ?, completed_at = ? WHERE submission_id = ?'
+      'UPDATE submissions SET status = ?, completed_at = ? WHERE submission_id = ?'
     ).bind(
-      JSON.stringify(data.activities),
       'completed',
       completedAt,
       data.submissionId
@@ -129,6 +129,10 @@ export async function handleCompleteSubmit(request, env) {
     };
 
     const pdfs = await makePDFs(submissionData, data.submissionId, env);
+
+    // Save to both old and new tables for backward compatibility
+    await saveDocuments(env, data.submissionId, pdfs);
+    await saveSubmissionActivities(env, submission.verification_token, pdfs, completedAt);
 
     // Generate archery PIN if needed
     let archeryPin = null;

@@ -28,7 +28,6 @@ database_name  = "waivers"
 database_id    = "0846e6ed-6eea-4b4f-a8dd-f9b9b232430e"
 preview_database_id = "a26bc6c3-64d9-45ab-80c8-8a10be058c27"           # replace after `wrangler d1 create`
 
-[[browser]]
+[browser]
 binding = "BROWSER"
-experimental_remote = true
 
