@@ -171,10 +171,10 @@ export async function getDocumentsBySubmission(env, submissionId) {
   return result.results || [];
 }
 
-export async function createDocument(env, documentId, submissionId, activity, r2Key, createdAt) {
+export async function createDocument(env, documentId, submissionId, activity, r2Key, initials) {
   return await env.waivers.prepare(
-    'INSERT INTO documents (document_id, submission_id, activity, r2_key, created_at) VALUES (?, ?, ?, ?, ?)'
-  ).bind(documentId, submissionId, activity, r2Key, createdAt).run();
+    'INSERT INTO documents (document_id, submission_id, activity, r2_key, initials) VALUES (?, ?, ?, ?, ?)'
+  ).bind(documentId, submissionId, activity, r2Key, initials).run();
 }
 
 // Document Hashes (legacy)
