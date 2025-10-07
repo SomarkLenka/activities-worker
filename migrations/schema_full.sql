@@ -23,6 +23,7 @@ DROP TABLE IF EXISTS submissions;
 -- =============================================================================
 
 -- Submissions table: One row per waiver form submission
+-- All submissions now require verification_token (two-step flow only)
 CREATE TABLE submissions (
   submission_id TEXT PRIMARY KEY,
   created_at TEXT NOT NULL,
@@ -32,8 +33,8 @@ CREATE TABLE submissions (
   guest_email TEXT NOT NULL,
   activities TEXT NOT NULL,
   status TEXT DEFAULT 'pending',
-  verification_token TEXT UNIQUE,
-  token_expires_at TEXT,
+  verification_token TEXT NOT NULL UNIQUE,
+  token_expires_at TEXT NOT NULL,
   completed_at TEXT
 );
 

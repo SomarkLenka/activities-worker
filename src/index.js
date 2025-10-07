@@ -1,5 +1,6 @@
 import { handleRoot } from './routes/root.js';
-import { handleSubmit } from './routes/submit.js';
+// Deprecated: Old single-step submit route
+// import { handleSubmit } from './routes/submit.js';
 import { handleInitialSubmit, handleCompleteSubmit } from './routes/submit-flow.js';
 import { handleAdminSearch } from './routes/admin/search.js';
 import { handleAdminActivities } from './routes/admin/activities.js';
@@ -21,7 +22,8 @@ export default {
 
     try {
       if (request.method === 'GET'  && pathname === '/')                      return await handleRoot(request, env);
-      if (request.method === 'POST' && pathname === '/submit')                return await handleSubmit(request, env);
+      // Deprecated: Old single-step submit route - use two-step flow instead
+      // if (request.method === 'POST' && pathname === '/submit')                return await handleSubmit(request, env);
       if (request.method === 'POST' && pathname === '/submit/initial')        return await handleInitialSubmit(request, env);
       if (request.method === 'POST' && pathname === '/submit/complete')       return await handleCompleteSubmit(request, env);
       if (request.method === 'GET'  && pathname === '/admin/search')          return await handleAdminSearch(request, env);
