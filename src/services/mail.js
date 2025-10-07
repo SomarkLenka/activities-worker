@@ -1,4 +1,3 @@
-import { Resend } from 'resend';
 import verificationEmailTemplate from '../templates/email-verification.html';
 import verificationTextTemplate from '../templates/email-verification.txt';
 import waiverEmailTemplate from '../templates/email-waiver.html';
@@ -34,15 +33,24 @@ function replaceTemplateVars(template, replacements) {
   return result;
 }
 
-async function sendEmail(resend, env, emailData) {
-  const { data: responseData, error } = await resend.emails.send({
-    ...emailData,
-    from: `${emailData.from} <${env.EMAIL_FROM}>`
+async function sendEmail(env, emailData) {
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${env.RESEND_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      ...emailData,
+      from: `${emailData.from} <${env.EMAIL_FROM}>`
+    })
   });
 
-  if (error) {
-    console.error('Resend error:', error);
-    throw new Error(error.message);
+  const responseData = await response.json();
+
+  if (!response.ok) {
+    console.error('Resend API error:', responseData);
+    throw new Error(responseData.message || 'Failed to send email');
   }
 
   return responseData;
@@ -59,8 +67,6 @@ function buildEmailData(text, html) {
 }
 
 export async function sendVerificationEmail(email, name, verificationUrl, env) {
-  const resend = new Resend(env.RESEND_API_KEY);
-
   const replacements = {
     GUEST_NAME: name,
     VERIFICATION_URL: verificationUrl
@@ -73,7 +79,7 @@ export async function sendVerificationEmail(email, name, verificationUrl, env) {
   emailData.to = email;
 
   try {
-    const responseData = await sendEmail(resend, env, emailData);
+    const responseData = await sendEmail(env, emailData);
     console.log('Verification email sent successfully:', responseData);
   } catch (error) {
     console.error('Verification email send error:', error);
@@ -82,8 +88,6 @@ export async function sendVerificationEmail(email, name, verificationUrl, env) {
 }
 
 export async function sendWaiverEmail(data, pdfs, pin, env) {
-  const resend = new Resend(env.RESEND_API_KEY);
-
   const replacements = {
     GUEST_NAME: data.guestName,
     PROPERTY_ID: data.propertyId,
@@ -116,7 +120,7 @@ export async function sendWaiverEmail(data, pdfs, pin, env) {
   }));
 
   try {
-    const responseData = await sendEmail(resend, env, emailData);
+    const responseData = await sendEmail(env, emailData);
     console.log('Email sent successfully:', responseData);
   } catch (error) {
     console.error('Email send error:', error);
