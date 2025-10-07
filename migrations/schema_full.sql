@@ -32,7 +32,7 @@ CREATE TABLE submissions (
   guest_email TEXT NOT NULL,
   activities TEXT NOT NULL,
   status TEXT DEFAULT 'pending',
-  verification_token TEXT,
+  verification_token TEXT UNIQUE,
   token_expires_at TEXT,
   completed_at TEXT
 );
