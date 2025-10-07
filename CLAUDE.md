@@ -46,10 +46,12 @@ This is a **Cloudflare Workers-based digital waiver management system** for rent
 - Manage via admin panel or direct database queries
 
 ### 3. PDF Generation
-- Uses **pdf-lib** for programmatic PDF creation
-- No external service dependencies - runs in-memory
+- Uses **Cloudflare Browser Rendering API** with remote worker
+- Binding: `env.BROWSER` configured in wrangler.toml
+- Generates PDFs from HTML using headless browser
 - Supports embedding PNG signature images
-- A4 page size (595 x 842 points)
+- A4 page size with custom margins
+- Browser binding uses `experimental_remote = true` for remote rendering
 
 ### 4. Email Service
 - Uses **Resend** API (free tier: 3,000 emails/month)
@@ -64,12 +66,14 @@ This is a **Cloudflare Workers-based digital waiver management system** for rent
 
 ### 6. Running Locally
 ```bash
-# Local development (pdf-lib runs in-process)
-wrangler dev --local
+# Local development (requires remote browser binding)
+wrangler dev --local --remote
 
-# Remote development (uses production D1/KV/R2)
+# Remote development (uses production D1/KV/R2 and browser)
 wrangler dev --remote
 ```
+
+**Note**: The Browser Rendering API requires remote execution and does not work in pure local mode. Always use `--remote` flag to enable browser binding.
 
 ## Common Issues and Solutions
 
@@ -91,6 +95,15 @@ wrangler d1 execute waivers --remote --file=migrations/0003_seed_data.sql
 ### Issue: PDF signature not displaying
 **Cause**: Signature image must be PNG format (data:image/png;base64,...)
 **Solution**: Ensure signature canvas exports as PNG, not JPEG
+
+### Issue: "The RPC receiver does not implement the method 'launch'"
+**Cause**: Browser Rendering API not available in local-only mode
+**Solution**:
+```bash
+# Use remote flag to enable browser binding
+wrangler dev --remote
+```
+The browser binding requires remote execution and cannot run in pure local mode.
 
 ## Code Style Guidelines
 
@@ -151,8 +164,8 @@ When testing the full flow:
 ## Important Commands
 
 ```bash
-# Local development
-wrangler dev --local
+# Local development (with remote browser binding)
+wrangler dev --remote
 
 # View logs
 wrangler tail
@@ -176,6 +189,15 @@ wrangler deploy
 
 ## Recent Changes (Latest Session)
 
+### October 2025 - Database Restructuring
+- Created `submission_activities` table to separate activities from submissions
+- `verification_token` now acts as foreign key linking submissions to activities
+- Each activity stored separately with unique document hash and R2 key
+- Updated admin search to query both old and new table structures
+- Maintain backward compatibility with `documents` and `hashes` tables
+- Added comprehensive `schema_full.sql` for clean database installations
+- Fixed wrangler.toml browser binding configuration
+
 ### October 2025 - KV to Database Migration
 - Migrated property and activity configuration from KV namespace to D1 database
 - Added new database tables: `properties`, `activities`, `risk_descriptions`
@@ -183,13 +205,12 @@ wrangler deploy
 - Removed KV namespace bindings from wrangler.toml
 - Created migration scripts for seamless data transfer
 
-### Previous Changes
-- Replaced Cloudflare Browser Rendering with pdf-lib for in-memory PDF generation
-- Consolidated email functionality into main worker using Resend API
-- Removed browser-worker and email-worker service dependencies
-- Simplified deployment to single worker architecture
-- Updated PDF generation to use programmatic text and image drawing
-- No longer requires external browser rendering service
+### PDF Generation Architecture
+- Uses Cloudflare Browser Rendering API with remote worker binding
+- Browser binding configured with `experimental_remote = true`
+- Generates PDFs from HTML templates using headless Chrome
+- Requires `--remote` flag for local development
+- Cannot run in pure local-only mode due to browser API requirements
 
 ## Notes for Future Development
 
