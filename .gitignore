@@ -2,6 +2,5 @@ node_modules/
 dist/
 .env
 .dev.vars
-email-worker/
-browser-worker/
+claude/
 generate_test_data.js

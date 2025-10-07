@@ -1,78 +1,177 @@
 import { nanoid } from '../utils/nanoid.js';
-import { json, bad } from '../utils/admin.js';
-import { validateSubmission } from '../services/validation.js';
-import { saveSubmission, saveDocuments } from '../services/storage.js';
 import { makePDFs } from '../services/pdf.js';
-import { sendMail } from '../services/mail.js';
+import { sendVerificationEmail, sendWaiverEmail } from '../services/mail.js';
+import { saveSubmissionActivities, saveDocuments } from '../services/storage.js';
 
-export async function handleSubmit(request, env) {
-  console.log('Submit endpoint called');
-  const data = await request.json();
-  console.log('Received data:', data);
-
-  /* ---- validation ----------------------------------------------------- */
-  const validationError = validateSubmission(data);
-  if (validationError) {
-    return bad(validationError);
-  }
-
-  /* ---- write submission ----------------------------------------------- */
-  const subId = nanoid(10);
-  const createdAt = new Date().toISOString();
-
+export async function handleInitialSubmit(request, env) {
   try {
-    await saveSubmission(env, subId, data, createdAt);
-    console.log('Submission saved to database');
-  } catch (dbError) {
-    console.error('Database error:', dbError);
-    return json({ ok: false, error: 'Database not initialized. Run migrations first.' }, 500);
-  }
+    const data = await request.json();
 
-  /* ---- generate PDFs -------------------------------------------------- */
-  let pdfInfos;
-  try {
-    pdfInfos = await makePDFs(data, subId, env);
-    console.log('PDFs generated:', pdfInfos.length);
-  } catch (pdfError) {
-    console.error('PDF generation error:', pdfError);
-    return json({ ok: false, error: 'PDF generation failed: ' + pdfError.message }, 500);
-  }
+    // Validate required fields
+    if (!data.propertyId || !data.checkinDate || !data.guestName || !data.guestEmail) {
+      return new Response(JSON.stringify({ ok: false, error: 'Missing required fields' }), {
+        status: 400,
+        headers: { 'content-type': 'application/json' }
+      });
+    }
 
-  /* ---- save document records ------------------------------------------ */
-  try {
-    await saveDocuments(env, subId, pdfInfos);
-    console.log('Document records saved');
-  } catch (docError) {
-    console.error('Document save error:', docError);
-  }
+    // Generate submission ID and verification token
+    const submissionId = nanoid(12);
+    const verificationToken = nanoid(32);
+    const createdAt = new Date().toISOString();
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // 24 hours
 
-  const pin = data.activities.includes('archery') ? env.ARCHERY_PIN : null;
+    // Create pending submission record
+    await env.waivers.prepare(
+      `INSERT INTO submissions
+       (submission_id, created_at, property_id, checkin_date, guest_name, guest_email, activities,
+        status, verification_token, token_expires_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(
+      submissionId,
+      createdAt,
+      data.propertyId,
+      data.checkinDate,
+      data.guestName,
+      data.guestEmail,
+      '[]', // Empty activities initially
+      'pending',
+      verificationToken,
+      expiresAt
+    ).run();
 
-  /* ---- dev mode: return download URLs --------------------------------- */
-  if (env.DEV_MODE === 'true') {
-    const downloads = pdfInfos.map(p => ({
-      filename: p.filename,
-      url: `/download/${p.r2Key}`
-    }));
+    // Send verification email
+    const verificationUrl = `${new URL(request.url).origin}/?token=${verificationToken}`;
 
-    return json({
-      ok: true,
-      devMode: true,
-      downloads,
-      pin
+    if (env.DEV_MODE === 'true') {
+      console.log('Dev Mode: Verification email would be sent to:', data.guestEmail);
+      console.log('Dev Mode: Verification URL:', verificationUrl);
+
+      return new Response(JSON.stringify({
+        ok: true,
+        devMode: true,
+        submissionId,
+        verificationUrl
+      }), {
+        headers: { 'content-type': 'application/json' }
+      });
+    } else {
+      await sendVerificationEmail(data.guestEmail, data.guestName, verificationUrl, env);
+
+      return new Response(JSON.stringify({
+        ok: true,
+        submissionId
+      }), {
+        headers: { 'content-type': 'application/json' }
+      });
+    }
+  } catch (error) {
+    console.error('Initial submission error:', error);
+    return new Response(JSON.stringify({ ok: false, error: error.message }), {
+      status: 500,
+      headers: { 'content-type': 'application/json' }
     });
   }
+}
 
-  /* ---- production: send email ----------------------------------------- */
+export async function handleCompleteSubmit(request, env) {
   try {
-    await sendMail(data, pdfInfos, pin, env);
-    console.log('Email sent successfully');
-  } catch (emailError) {
-    console.error('Email sending failed:', emailError);
-    return json({ ok: false, error: 'Email sending failed: ' + emailError.message }, 500);
-  }
+    const data = await request.json();
 
-  return json({ ok: true,
-                emailed: pdfInfos.map(p => p.filename),
-                pin });
+    // Validate required fields
+    if (!data.submissionId || !data.activities || !data.initials || !data.signature || !data.accepted) {
+      return new Response(JSON.stringify({ ok: false, error: 'Missing required fields' }), {
+        status: 400,
+        headers: { 'content-type': 'application/json' }
+      });
+    }
+
+    // Retrieve submission
+    const submission = await env.waivers.prepare(
+      'SELECT * FROM submissions WHERE submission_id = ? AND status = ?'
+    ).bind(data.submissionId, 'pending').first();
+
+    if (!submission) {
+      return new Response(JSON.stringify({ ok: false, error: 'Invalid or expired submission' }), {
+        status: 404,
+        headers: { 'content-type': 'application/json' }
+      });
+    }
+
+    // Check if token expired
+    const expires = new Date(submission.token_expires_at);
+    if (expires < new Date()) {
+      return new Response(JSON.stringify({ ok: false, error: 'Verification token expired' }), {
+        status: 410,
+        headers: { 'content-type': 'application/json' }
+      });
+    }
+
+    // Update submission status
+    const completedAt = new Date().toISOString();
+    await env.waivers.prepare(
+      'UPDATE submissions SET status = ?, completed_at = ? WHERE submission_id = ?'
+    ).bind(
+      'completed',
+      completedAt,
+      data.submissionId
+    ).run();
+
+    // Generate PDFs
+    const submissionData = {
+      propertyId: submission.property_id,
+      checkinDate: submission.checkin_date,
+      guestName: submission.guest_name,
+      guestEmail: submission.guest_email,
+      activities: data.activities,
+      initials: data.initials,
+      signature: data.signature
+    };
+
+    const pdfs = await makePDFs(submissionData, data.submissionId, env);
+
+    // Save to both old and new tables for backward compatibility
+    await saveDocuments(env, data.submissionId, pdfs);
+    await saveSubmissionActivities(env, submission.verification_token, pdfs, completedAt);
+
+    // Generate archery PIN if needed
+    let archeryPin = null;
+    if (data.activities.includes('archery')) {
+      archeryPin = env.ARCHERY_PIN || '1234';
+    }
+
+    // Development mode or production mode
+    if (env.DEV_MODE === 'true') {
+      const downloads = pdfs.map(p => ({
+        filename: p.filename,
+        url: `/download/${p.id}`
+      }));
+
+      return new Response(JSON.stringify({
+        ok: true,
+        devMode: true,
+        downloads,
+        pin: archeryPin
+      }), {
+        headers: { 'content-type': 'application/json' }
+      });
+    } else {
+      // Send email with waivers
+      await sendWaiverEmail(submissionData, pdfs, archeryPin, env);
+
+      return new Response(JSON.stringify({
+        ok: true,
+        emailed: pdfs.map(p => p.filename),
+        pin: archeryPin
+      }), {
+        headers: { 'content-type': 'application/json' }
+      });
+    }
+  } catch (error) {
+    console.error('Complete submission error:', error);
+    return new Response(JSON.stringify({ ok: false, error: error.message }), {
+      status: 500,
+      headers: { 'content-type': 'application/json' }
+    });
+  }
 }
