@@ -511,7 +511,7 @@
 
         currentProperties = data.properties;
         selector.innerHTML = currentProperties.map(p =>
-          \`<option value="\${p.id}">\${p.name}</option>\`
+          `<option value="${p.id}">${p.name}</option>`
         ).join('');
 
       } catch (error) {
