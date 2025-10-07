@@ -1,5 +1,6 @@
 import { nanoid } from '../utils/nanoid.js';
 import waiverTemplate from '../templates/waiver.html';
+import { getLatestRelease, getActivitiesByProperty, getAllRiskDescriptions } from '../utils/db.js';
 
 async function generateDocumentHash(data) {
   const hashInput = JSON.stringify({
@@ -62,28 +63,17 @@ export async function makePDFs(data, subId, env) {
   const d = String(now.getUTCDate()).padStart(2, '0');
 
   // Fetch latest legal release
-  const latestRelease = await env.waivers.prepare(
-    'SELECT version, release_date, waiver_text FROM releases ORDER BY release_date DESC, version DESC LIMIT 1'
-  ).first();
+  const latestRelease = await getLatestRelease(env);
 
   if (!latestRelease) {
     throw new Error('No legal release found. Please create a release in the admin panel first.');
   }
 
   // Fetch activity info from database
-  const activitiesResult = await env.waivers.prepare(
-    'SELECT slug, label, risk FROM activities WHERE property_id = ?'
-  ).bind(data.propertyId).all();
-  const activities = activitiesResult.results || [];
+  const activities = await getActivitiesByProperty(env, data.propertyId);
 
   // Fetch risk descriptions from database
-  const risksResult = await env.waivers.prepare(
-    'SELECT level, description FROM risk_descriptions'
-  ).all();
-  const risks = {};
-  for (const row of (risksResult.results || [])) {
-    risks[row.level] = { description: row.description };
-  }
+  const risks = await getAllRiskDescriptions(env);
 
   // Save signature to R2 (once per submission, not per activity)
   let signatureKey = null;

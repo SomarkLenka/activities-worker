@@ -1,3 +1,5 @@
+import { createDocument, createHash, createSubmissionActivity } from '../utils/db.js';
+
 export async function saveSubmission(env, subId, data, createdAt) {
   await env.waivers.prepare(
       'INSERT INTO submissions VALUES(?1,?2,?3,?4,?5,?6,?7)'
@@ -12,25 +14,18 @@ export async function saveDocuments(env, subId, pdfInfos) {
 
   for (const p of pdfInfos) {
     // Insert document (for backward compatibility)
-    await env.waivers.prepare(
-        'INSERT INTO documents VALUES(?1,?2,?3,?4,?5)'
-      ).bind(p.id, subId, p.activity, p.r2Key, p.initials).run();
+    await createDocument(env, p.id, subId, p.activity, p.r2Key, p.initials);
 
     // Insert hash (for backward compatibility)
     const hashId = `hash_${p.id}`;
-    await env.waivers.prepare(
-        'INSERT INTO hashes VALUES(?1,?2,?3,?4)'
-      ).bind(hashId, p.id, p.hash, now).run();
+    await createHash(env, hashId, p.id, p.hash, now);
   }
 }
 
 export async function saveSubmissionActivities(env, verificationToken, pdfInfos, createdAt) {
   for (const p of pdfInfos) {
-    await env.waivers.prepare(
-      `INSERT INTO submission_activities
-       (activity_id, verification_token, activity_slug, activity_label, initials, document_hash, r2_key, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-    ).bind(
+    await createSubmissionActivity(
+      env,
       p.id,
       verificationToken,
       p.activity,
@@ -39,6 +34,6 @@ export async function saveSubmissionActivities(env, verificationToken, pdfInfos,
       p.hash,
       p.r2Key,
       createdAt
-    ).run();
+    );
   }
 }
