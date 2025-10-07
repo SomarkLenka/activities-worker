@@ -4,24 +4,46 @@ import verificationTextTemplate from '../templates/email-verification.txt';
 import waiverEmailTemplate from '../templates/email-waiver.html';
 import waiverTextTemplate from '../templates/email-waiver.txt';
 
+function parseEmailTemplate(template) {
+  const lines = template.split('\n');
+  const headers = {};
+  let bodyStart = 0;
+
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].startsWith('SUBJECT:')) {
+      headers.subject = lines[i].substring(8).trim();
+    } else if (lines[i].startsWith('FROM:')) {
+      headers.from = lines[i].substring(5).trim();
+    } else if (lines[i].trim() === '') {
+      bodyStart = i + 1;
+      break;
+    }
+  }
+
+  headers.body = lines.slice(bodyStart).join('\n');
+  return headers;
+}
+
 export async function sendVerificationEmail(email, name, verificationUrl, env) {
   const resend = new Resend(env.RESEND_API_KEY);
 
-  const bodyText = verificationTextTemplate
+  const textTemplateProcessed = verificationTextTemplate
     .replace('{{GUEST_NAME}}', name)
     .replace('{{VERIFICATION_URL}}', verificationUrl);
 
-  const bodyHtml = verificationEmailTemplate
+  const htmlTemplateProcessed = verificationEmailTemplate
     .replace('{{GUEST_NAME}}', name)
     .replace('{{VERIFICATION_URL}}', verificationUrl);
+
+  const { subject, from, body: bodyText } = parseEmailTemplate(textTemplateProcessed);
 
   try {
     const { data: emailData, error } = await resend.emails.send({
-      from: `Activity Waivers <${env.EMAIL_FROM}>`,
+      from: `${from} <${env.EMAIL_FROM}>`,
       to: email,
-      subject: 'Complete Your Activity Waiver',
+      subject,
       text: bodyText,
-      html: bodyHtml
+      html: htmlTemplateProcessed
     });
 
     if (error) {
@@ -50,25 +72,27 @@ export async function sendWaiverEmail(data, pdfs, pin, env) {
 
   const archeryPinText = pin ? `Your Archery PIN is ${pin}\n\n` : '';
 
-  const bodyText = waiverTextTemplate
+  const textTemplateProcessed = waiverTextTemplate
     .replace('{{GUEST_NAME}}', data.guestName)
     .replace('{{PROPERTY_ID}}', data.propertyId)
     .replace('{{PDF_LIST}}', pdfListText)
     .replace('{{ARCHERY_PIN}}', archeryPinText);
 
-  const bodyHtml = waiverEmailTemplate
+  const htmlTemplateProcessed = waiverEmailTemplate
     .replace('{{GUEST_NAME}}', data.guestName)
     .replace('{{PROPERTY_ID}}', data.propertyId)
     .replace('{{PDF_LIST}}', pdfListHtml)
     .replace('{{ARCHERY_PIN}}', archeryPinHtml);
 
+  const { subject, from, body: bodyText } = parseEmailTemplate(textTemplateProcessed);
+
   try {
     const { data: emailData, error } = await resend.emails.send({
-      from: `Activity Waivers <${env.EMAIL_FROM}>`,
+      from: `${from} <${env.EMAIL_FROM}>`,
       to: data.guestEmail,
-      subject: 'Your activity waiver(s)',
+      subject,
       text: bodyText,
-      html: bodyHtml,
+      html: htmlTemplateProcessed,
       attachments: pdfs.map(p => ({
         filename: p.filename,
         content: btoa(String.fromCharCode(...new Uint8Array(p.bytes)))

@@ -1,3 +1,6 @@
+SUBJECT: Complete Your Activity Waiver
+FROM: Activity Waivers
+
 Hi {{GUEST_NAME}},
 
 Thank you for starting your activity waiver submission!

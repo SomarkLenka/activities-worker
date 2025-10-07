@@ -1,3 +1,6 @@
+SUBJECT: Your activity waiver(s)
+FROM: Activity Waivers
+
 Hi {{GUEST_NAME}},
 
 Thank you for completing your waiver for {{PROPERTY_ID}}.
