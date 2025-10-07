@@ -2,6 +2,7 @@ import { nanoid } from '../utils/nanoid.js';
 import waiverTemplate from '../templates/waiver.html';
 import { getLatestRelease, getActivitiesByProperty, getAllRiskDescriptions } from '../utils/db.js';
 import { generatePDFNative } from './pdf-native.js';
+import { generatePDFWithPuppeteer, generateBatchPDFsWithPuppeteer } from './pdf-browser.js';
 
 function parseGuestName(guestName) {
   const nameParts = guestName.trim().split(/\s+/);
@@ -66,24 +67,7 @@ function generateWaiverHTML(data, activityInfo, riskData, latestRelease, documen
 }
 
 async function generatePDFWithBrowser(htmlContent, env) {
-  const response = await env.BROWSER.fetch('https://render', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      html: htmlContent,
-      options: {
-        format: 'A4',
-        printBackground: true
-      }
-    })
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Browser rendering failed: ${response.status} ${response.statusText} - ${errorText}`);
-  }
-
-  return await response.arrayBuffer();
+  return await generatePDFWithPuppeteer(htmlContent, env);
 }
 
 export async function makePDFs(data, subId, env) {
@@ -233,21 +217,8 @@ export async function makePDFs(data, subId, env) {
           };
         });
 
-        const response = await env.BROWSER.fetch('https://render', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            batch: batchItems,
-            concurrency: 3
-          })
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`Browser rendering failed: ${response.status} ${response.statusText} - ${errorText}`);
-        }
-
-        const { results: pdfResults, failed } = await response.json();
+        const batchResult = await generateBatchPDFsWithPuppeteer(batchItems, env);
+        const { results: pdfResults, failed } = batchResult;
 
         if (failed > 0) {
           const failedItems = pdfResults.filter(r => !r.success);
