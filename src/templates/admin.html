@@ -564,7 +564,7 @@
 
       const countHtml = '<div class="result-count">Found ' + results.length + ' submission' + (results.length !== 1 ? 's' : '') + '</div>';
 
-      const tableHtml = \`
+      const tableHtml = `
         <table>
           <thead>
             <tr>
@@ -578,32 +578,32 @@
             </tr>
           </thead>
           <tbody>
-            \${results.map(row => {
+            ${results.map(row => {
               const createdDate = new Date(row.created_at).toLocaleString();
               const activities = JSON.parse(row.activities);
 
-              return \`
+              return `
                 <tr>
-                  <td>\${createdDate}</td>
-                  <td>\${escapeHtml(row.guest_name)}</td>
-                  <td>\${escapeHtml(row.guest_email)}</td>
-                  <td>\${escapeHtml(row.property_id)}</td>
-                  <td>\${row.checkin_date}</td>
+                  <td>${createdDate}</td>
+                  <td>${escapeHtml(row.guest_name)}</td>
+                  <td>${escapeHtml(row.guest_email)}</td>
+                  <td>${escapeHtml(row.property_id)}</td>
+                  <td>${row.checkin_date}</td>
                   <td>
-                    \${activities.map(a =>
+                    ${activities.map(a =>
                       '<span class="activity-badge">' +
                       escapeHtml(a) + '</span>'
                     ).join('')}
                   </td>
                   <td>
-                    <button class="btn-primary" onclick="downloadAllWaivers('\${escapeHtml(row.submission_id)}')" style="padding: 8px 12px; font-size: 13px;">Download All</button>
+                    <button class="btn-primary" onclick="downloadAllWaivers('${escapeHtml(row.submission_id)}')" style="padding: 8px 12px; font-size: 13px;">Download All</button>
                   </td>
                 </tr>
-              \`;
+              `;
             }).join('')}
           </tbody>
         </table>
-      \`;
+      `;
 
       resultsDiv.innerHTML = countHtml + tableHtml;
     }
@@ -624,7 +624,7 @@
     const activitiesList = document.getElementById('activitiesList');
 
     function showMessage(text, type = 'success') {
-      messageDiv.innerHTML = \`<div class="message \${type}">\${text}</div>\`;
+      messageDiv.innerHTML = `<div class="message ${type}">${text}</div>`;
       setTimeout(() => messageDiv.innerHTML = '', 5000);
     }
 
@@ -635,7 +635,7 @@
       if (!propertyId) return;
 
       try {
-        const response = await fetch(\`/admin/activities?property=\${propertyId}\`);
+        const response = await fetch(`/admin/activities?property=${propertyId}`);
         const data = await response.json();
 
         if (!data.ok) {
@@ -644,7 +644,7 @@
 
         displayActivities(data.activities);
       } catch (error) {
-        activitiesList.innerHTML = \`<div class="error">Error loading activities: \${error.message}</div>\`;
+        activitiesList.innerHTML = `<div class="error">Error loading activities: ${error.message}</div>`;
       }
     }
 
@@ -654,19 +654,19 @@
         return;
       }
 
-      activitiesList.innerHTML = activities.map(activity => \`
+      activitiesList.innerHTML = activities.map(activity => `
         <div class="activity-item">
           <div class="activity-info">
-            <div class="activity-slug">\${activity.slug}</div>
-            <div class="activity-label">\${activity.label}</div>
-            <span class="risk-badge risk-\${activity.risk}">\${activity.risk.toUpperCase()}</span>
+            <div class="activity-slug">${activity.slug}</div>
+            <div class="activity-label">${activity.label}</div>
+            <span class="risk-badge risk-${activity.risk}">${activity.risk.toUpperCase()}</span>
           </div>
           <div class="activity-actions">
-            <button class="btn-warning" onclick="editActivity('\${activity.slug}', '\${activity.label}', '\${activity.risk}')">Edit</button>
-            <button class="btn-danger" onclick="removeActivity('\${activity.slug}')">Remove</button>
+            <button class="btn-warning" onclick="editActivity('${activity.slug}', '${activity.label}', '${activity.risk}')">Edit</button>
+            <button class="btn-danger" onclick="removeActivity('${activity.slug}')">Remove</button>
           </div>
         </div>
-      \`).join('');
+      `).join('');
     }
 
     document.getElementById('addForm').addEventListener('submit', async (e) => {
@@ -685,7 +685,7 @@
       const risk = document.getElementById('addRisk').value;
 
       try {
-        const response = await fetch(\`/admin/activities/add?property=\${propertyId}\`, {
+        const response = await fetch(`/admin/activities/add?property=${propertyId}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ slug, label, risk })
@@ -697,7 +697,7 @@
           throw new Error(data.error);
         }
 
-        showMessage(\`Activity "\${label}" added successfully!\`);
+        showMessage(`Activity "${label}" added successfully!`);
         document.getElementById('addForm').reset();
         loadActivities();
       } catch (error) {
@@ -706,13 +706,13 @@
     });
 
     async function removeActivity(slug) {
-      if (!confirm(\`Remove activity "\${slug}"?\`)) return;
+      if (!confirm(`Remove activity "${slug}"?`)) return;
 
       const selector = document.getElementById('propertySelect');
       const propertyId = selector.value;
 
       try {
-        const response = await fetch(\`/admin/activities/remove?property=\${propertyId}\`, {
+        const response = await fetch(`/admin/activities/remove?property=${propertyId}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ slug })
@@ -724,7 +724,7 @@
           throw new Error(data.error);
         }
 
-        showMessage(\`Activity "\${slug}" removed successfully!\`);
+        showMessage(`Activity "${slug}" removed successfully!`);
         loadActivities();
       } catch (error) {
         showMessage(error.message, 'error');
@@ -751,7 +751,7 @@
       const propertyId = selector.value;
 
       try {
-        const response = await fetch(\`/admin/activities/update?property=\${propertyId}\`, {
+        const response = await fetch(`/admin/activities/update?property=${propertyId}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ slug, label, risk })
@@ -763,7 +763,7 @@
           throw new Error(data.error);
         }
 
-        showMessage(\`Activity "\${slug}" updated successfully!\`);
+        showMessage(`Activity "${slug}" updated successfully!`);
         loadActivities();
       } catch (error) {
         showMessage(error.message, 'error');
@@ -775,7 +775,7 @@
     const propertiesList = document.getElementById('propertiesList');
 
     function showPropMessage(text, type = 'success') {
-      propMessageDiv.innerHTML = \`<div class="message \${type}">\${text}</div>\`;
+      propMessageDiv.innerHTML = `<div class="message ${type}">${text}</div>`;
       setTimeout(() => propMessageDiv.innerHTML = '', 5000);
     }
 
@@ -790,7 +790,7 @@
 
         displayProperties(data.properties);
       } catch (error) {
-        propertiesList.innerHTML = \`<div class="error">Error loading properties: \${error.message}</div>\`;
+        propertiesList.innerHTML = `<div class="error">Error loading properties: ${error.message}</div>`;
       }
     }
 
@@ -800,17 +800,17 @@
         return;
       }
 
-      propertiesList.innerHTML = properties.map(property => \`
+      propertiesList.innerHTML = properties.map(property => `
         <div class="activity-item">
           <div class="activity-info">
-            <div class="activity-slug">\${property.id}</div>
-            <div class="activity-label">\${property.name}</div>
+            <div class="activity-slug">${property.id}</div>
+            <div class="activity-label">${property.name}</div>
           </div>
           <div class="activity-actions">
-            <button class="btn-danger" onclick="removeProperty('\${property.id}')">Remove</button>
+            <button class="btn-danger" onclick="removeProperty('${property.id}')">Remove</button>
           </div>
         </div>
-      \`).join('');
+      `).join('');
     }
 
     document.getElementById('addPropertyForm').addEventListener('submit', async (e) => {
@@ -833,7 +833,7 @@
           throw new Error(data.error);
         }
 
-        showPropMessage(\`Property "\${name}" added successfully!\`);
+        showPropMessage(`Property "${name}" added successfully!`);
         document.getElementById('addPropertyForm').reset();
         document.getElementById('copyDefaultActivities').checked = true;
         loadProperties();
@@ -843,7 +843,7 @@
     });
 
     async function removeProperty(id) {
-      if (!confirm(\`Remove property "\${id}"?\`)) return;
+      if (!confirm(`Remove property "${id}"?`)) return;
 
       try {
         const response = await fetch('/admin/properties/remove', {
@@ -858,7 +858,7 @@
           throw new Error(data.error);
         }
 
-        showPropMessage(\`Property "\${id}" removed successfully!\`);
+        showPropMessage(`Property "${id}" removed successfully!`);
         loadProperties();
       } catch (error) {
         showPropMessage(error.message, 'error');
@@ -914,30 +914,30 @@
         // Display current release
         if (data.current) {
           const rel = data.current;
-          currentReleaseDiv.innerHTML = \`
+          currentReleaseDiv.innerHTML = `
             <div style="padding: 15px; background: #f0f9ff; border-left: 4px solid #0070f3; border-radius: 4px;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                <strong style="font-size: 18px;">Version \${rel.version}</strong>
-                <span style="color: #666; font-size: 14px;">\${new Date(rel.release_date).toLocaleDateString()}</span>
+                <strong style="font-size: 18px;">Version ${rel.version}</strong>
+                <span style="color: #666; font-size: 14px;">${new Date(rel.release_date).toLocaleDateString()}</span>
               </div>
-              <div style="white-space: pre-wrap; font-size: 14px; line-height: 1.6; color: #333; margin-top: 10px;">\${rel.waiver_text}</div>
+              <div style="white-space: pre-wrap; font-size: 14px; line-height: 1.6; color: #333; margin-top: 10px;">${rel.waiver_text}</div>
             </div>
-          \`;
+          `;
         } else {
           currentReleaseDiv.innerHTML = '<div class="empty">No releases yet. Create the first release below.</div>';
         }
 
         // Display history
         if (data.releases && data.releases.length > 0) {
-          historyDiv.innerHTML = data.releases.map(rel => \`
+          historyDiv.innerHTML = data.releases.map(rel => `
             <div style="padding: 12px; background: #fafafa; border: 1px solid #e0e0e0; border-radius: 4px; margin-bottom: 10px;">
               <div style="display: flex; justify-content: space-between; align-items: center;">
-                <strong>Version \${rel.version}</strong>
-                <span style="color: #666; font-size: 13px;">\${new Date(rel.release_date).toLocaleDateString()}</span>
+                <strong>Version ${rel.version}</strong>
+                <span style="color: #666; font-size: 13px;">${new Date(rel.release_date).toLocaleDateString()}</span>
               </div>
-              <div style="white-space: pre-wrap; font-size: 13px; line-height: 1.5; color: #555; margin-top: 8px; max-height: 100px; overflow-y: auto;">\${rel.waiver_text}</div>
+              <div style="white-space: pre-wrap; font-size: 13px; line-height: 1.5; color: #555; margin-top: 8px; max-height: 100px; overflow-y: auto;">${rel.waiver_text}</div>
             </div>
-          \`).join('');
+          `).join('');
         } else {
           historyDiv.innerHTML = '<div class="empty">No release history</div>';
         }
@@ -971,7 +971,7 @@
           throw new Error(data.error);
         }
 
-        showReleaseMessage(\`Release version \${data.version} created successfully!\`);
+        showReleaseMessage(`Release version ${data.version} created successfully!`);
         document.getElementById('releaseVersion').value = '';
         loadReleases();
       } catch (error) {
@@ -981,7 +981,7 @@
 
     function showReleaseMessage(msg, type = 'success') {
       const div = document.getElementById('releaseMessage');
-      div.innerHTML = \`<div class="\${type === 'error' ? 'error' : 'success'}">\${msg}</div>\`;
+      div.innerHTML = `<div class="${type === 'error' ? 'error' : 'success'}">${msg}</div>`;
       setTimeout(() => div.innerHTML = '', 5000);
     }
 
@@ -1078,7 +1078,7 @@
     // API Documentation functionality
     function loadApiDocs() {
       const apiDocsDiv = document.getElementById('apiDocs');
-      apiDocsDiv.innerHTML = \`<div class="loading">Loading API documentation...</div>\`;
+      apiDocsDiv.innerHTML = `<div class="loading">Loading API documentation...</div>`;
 
       fetch('/admin/api-docs')
         .then(response => response.text())
@@ -1102,19 +1102,19 @@
         .replace(/^## (.+)$/gm, '<h2 style="margin-top: 40px; color: #0070f3; border-bottom: 2px solid #0070f3; padding-bottom: 10px;">$1</h2>')
         .replace(/^# (.+)$/gm, '<h1 style="color: #0070f3;">$1</h1>')
         // Bold
-        .replace(/\\*\\*(.+?)\\*\\*/g, '<strong>$1</strong>')
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
         // Code blocks
-        .replace(/\`\`\`(\\w+)?\\n([\\s\\S]*?)\`\`\`/g, '<pre style="background: #f5f5f5; padding: 15px; border-radius: 4px; overflow-x: auto; border: 1px solid #ddd;"><code>$2</code></pre>')
+        .replace(/```(\w+)?\n([\s\S]*?)```/g, '<pre style="background: #f5f5f5; padding: 15px; border-radius: 4px; overflow-x: auto; border: 1px solid #ddd;"><code>$2</code></pre>')
         // Inline code
-        .replace(/\`([^\`]+)\`/g, '<code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px; font-family: monospace; font-size: 0.9em;">$1</code>')
+        .replace(/`([^`]+)`/g, '<code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px; font-family: monospace; font-size: 0.9em;">$1</code>')
         // Horizontal rule
         .replace(/^---$/gm, '<hr style="margin: 30px 0; border: none; border-top: 1px solid #ddd;">')
         // Lists
         .replace(/^- (.+)$/gm, '<li style="margin: 5px 0;">$1</li>')
         // Wrap consecutive list items
-        .replace(/(<li[^>]*>.*<\\/li>\\n?)+/g, '<ul style="margin: 10px 0; padding-left: 30px;">$&</ul>')
+        .replace(/(<li[^>]*>.*<\/li>\n?)+/g, '<ul style="margin: 10px 0; padding-left: 30px;">$&</ul>')
         // Paragraphs
-        .replace(/^(?!<[h|u|p|l|d|c])(\\S.*)$/gm, '<p style="margin: 10px 0;">$1</p>');
+        .replace(/^(?!<[h|u|p|l|d|c])(\S.*)$/gm, '<p style="margin: 10px 0;">$1</p>');
 
       return html;
     }
