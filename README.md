@@ -1,76 +1,144 @@
-# Waiver Worker - Activity Liability Waiver System
+# Activity Waiver Management System
 
-A Cloudflare Workers-based application for managing digital liability waivers for rental properties and activities. This system collects guest signatures, generates PDF waivers, and emails them automatically.
+A Cloudflare Workers-based application for managing digital liability waivers for rental properties and activities. This system provides a two-step verification flow, collects guest signatures, generates PDF waivers asynchronously, and emails them automatically.
 
 ## Overview
 
 This application provides a complete digital waiver management solution built on Cloudflare's edge platform:
+- **Two-Step Verification**: Email verification before waiver completion
 - **Digital Signature Collection**: Web-based form for guests to sign waivers
-- **PDF Generation**: Automatic PDF creation with signatures using Cloudflare Browser Rendering
-- **Email Delivery**: Automated waiver delivery to guests via Cloudflare Email
+- **Asynchronous PDF Generation**: Background PDF creation with retry logic
+- **Email Delivery**: Automated waiver delivery via Resend API
 - **Data Storage**: Persistent storage using D1 (database) and R2 (object storage)
-- **Activity-Specific Waivers**: Separate waivers for different activities (kayaking, pool, archery, sauna)
+- **Activity-Specific Waivers**: Separate waivers for different activities
+- **Admin Panel**: Comprehensive management interface for properties, activities, releases, and submissions
 
 ## Architecture
 
 ### Core Components
 
-#### Main Worker (`waiver-worker`)
-- **Location**: `src/index.mjs`
+#### Main Worker
+- **Location**: `src/index.js`
 - **Routes**:
-  - `GET /` - Serves the single-page application for waiver signing
-  - `POST /submit` - Processes waiver submissions
-  - `GET /admin/search` - Admin search interface for submitted waivers
+  - `GET /` - Single-page application for waiver signing
+  - `POST /submit/initial` - Initial submission with email verification
+  - `POST /submit/complete` - Complete waiver submission after verification
+  - `GET /admin` - Admin panel interface
+  - `GET /admin/search` - Search submitted waivers
+  - `GET /admin/properties` - Manage properties
+  - `GET /admin/activities` - Manage activities
+  - `GET /admin/releases` - Manage legal releases
+  - `GET /admin/risks` - Manage risk descriptions
   - `GET /status` - Health check endpoint
 
 #### Browser Rendering Worker
-- **Location**: `browser-worker/`
+- **Binding**: `BROWSER` service binding
 - **Purpose**: Converts HTML to PDF using Cloudflare's Browser Rendering API
-- **RPC Method**: `htmlToPdf()` - Called by main worker via service binding
+- **Features**:
+  - Single and batch PDF generation
+  - Concurrent processing (max 3 simultaneous)
+  - Automatic error handling
 
 ### Data Flow
 
-1. **Guest fills out waiver form** (`spa.js`)
-   - Selects property and check-in date
-   - Chooses activities requiring waivers
-   - Provides initials for each activity
-   - Signs digitally on canvas
-   - Accepts terms
+#### Initial Submission
+1. Guest fills out initial form (property, check-in date, name, email)
+2. System generates verification token (24-hour expiration)
+3. Verification email sent with unique link
+4. Submission stored with status='pending'
 
-2. **Form submission** (`index.mjs`)
-   - Validates all required fields
-   - Generates unique submission ID
-   - Stores submission in D1 database
+#### Complete Submission
+1. Guest clicks verification link
+2. Form pre-populated with submission data
+3. Guest selects activities, provides initials, signs
+4. Validates all initials are consistent
+5. Updates submission to status='processing'
+6. Returns immediate success response
+7. Background processing:
+   - Generates PDFs for each activity
+   - Saves to R2 and database
+   - Sends email with attachments
+   - Updates status to 'emailed' or 'failed'
+   - Retries with exponential backoff on failure
 
-3. **PDF generation** (`pdf.js`)
-   - Creates one PDF per selected activity
-   - Uses Browser Rendering Worker for HTML-to-PDF conversion
-   - Stores PDFs in R2 bucket with structured key format:
-     ```
-     waivers/YYYY/MM/DD/property-id/activity/guest-name-{id}.pdf
-     ```
-
-4. **Email delivery** (`mail.js`)
-   - Constructs MIME multipart email with PDF attachments
-   - Sends via Cloudflare Email API
-   - Includes archery PIN if applicable
+#### PDF Generation
+- Creates one PDF per selected activity
+- Uses Browser Rendering Worker for HTML-to-PDF conversion
+- Stores PDFs in R2 bucket with structured key format:
+  ```
+  waivers/YYYY/MM/DD/property-id/activity/lastName-firstName-activity-submissionID.pdf
+  ```
+- Stores signatures separately:
+  ```
+  waivers/YYYY/MM/DD/property-id/signatures/lastName-firstName-submissionID.png
+  ```
 
 ## Database Schema
 
-### `submissions` Table
-- `id` - Unique identifier (nanoid)
+### Core Tables
+
+#### `submissions`
+- `submission_id` - Unique identifier (nanoid)
 - `created_at` - ISO timestamp
 - `property_id` - Property identifier
 - `checkin_date` - Guest check-in date
 - `guest_name` - Guest full name
 - `guest_email` - Guest email address
 - `activities` - JSON array of selected activity slugs
+- `status` - pending, processing, emailed, completed, failed
+- `verification_token` - Unique token for email verification
+- `token_expires_at` - Token expiration timestamp
+- `completed_at` - Completion timestamp
+- `error_message` - Error details if status='failed'
 
-### `documents` Table
-- `id` - Document identifier
-- `submission_id` - Foreign key to submissions
-- `activity` - Activity name
+#### `submission_activities`
+- `activity_id` - Unique identifier
+- `verification_token` - Links to submission
+- `activity_slug` - Activity identifier
+- `activity_label` - Human-readable activity name
+- `initials` - Guest initials
+- `document_hash` - SHA-256 hash of document data
 - `r2_key` - R2 storage key for PDF
+- `created_at` - Timestamp
+
+#### `properties`
+- `id` - Property identifier
+- `name` - Property name
+- `created_at` - Timestamp
+
+#### `activities`
+- `id` - Auto-increment ID
+- `property_id` - Foreign key to properties
+- `slug` - Activity identifier (URL-safe)
+- `label` - Human-readable name
+- `risk` - Risk level (low, medium, high)
+- `created_at` - Timestamp
+
+#### `releases`
+- `version` - Version identifier (primary key)
+- `release_date` - Release date
+- `waiver_text` - Legal waiver text content
+- `created_at` - Timestamp
+
+#### `risk_descriptions`
+- `level` - Risk level (low, medium, high)
+- `description` - Risk description text
+- `created_at` - Timestamp
+
+### Legacy Tables (Backward Compatibility)
+
+#### `documents`
+- `document_id` - Document identifier
+- `submission_id` - Foreign key to submissions
+- `activity` - Activity slug
+- `r2_key` - R2 storage key
+- `initials` - Guest initials
+
+#### `hashes`
+- `hash_id` - Unique identifier
+- `document_id` - Foreign key to documents
+- `hash_value` - SHA-256 hash
+- `created_at` - Timestamp
 
 ## Configuration
 
@@ -78,19 +146,16 @@ This application provides a complete digital waiver management solution built on
 
 **Public Variables**:
 - `ARCHERY_PIN` - PIN code for archery activity (default: "1234")
-- `LEGAL_VERSION` - Version identifier for legal documents (default: "2024-06")
-- `EMAIL_FROM` - From address for waiver emails (default: "waivers@example.com")
-- `DEV_MODE` - Enable development mode with PDF downloads instead of email (default: "true", set to "false" for production)
+- `EMAIL_FROM` - From address for waiver emails
+- `DEV_MODE` - Enable development mode (default: "false")
 
 **Bindings**:
-- `PROPS_KV` - KV namespace for property data
+- `waivers` - D1 database
 - `WAIVERS_R2` - R2 bucket for PDF storage
-- `DB` (waivers) - D1 database for submissions
-- `BROWSER` - Service binding to browser-worker
+- `BROWSER` - Service binding to browser rendering worker
 
-**Secrets** (must be configured):
-- `CLOUDFLARE_ACCOUNT_ID` - Your Cloudflare account ID
-- `CLOUDFLARE_API_TOKEN` - API token with email send permissions
+**Secrets**:
+- `RESEND_API_KEY` - Resend API key for email sending
 
 ## Setup Instructions
 
@@ -98,210 +163,194 @@ This application provides a complete digital waiver management solution built on
 - Cloudflare account with Workers subscription
 - Node.js and npm installed
 - Wrangler CLI installed (`npm install -g wrangler`)
-- Cloudflare API token (for remote deployment)
+- Resend account with API key
 
 ### Installation Steps
 
 1. **Install dependencies**:
    ```bash
    npm install
-   cd browser-worker && npm install && cd ..
    ```
 
 2. **Create Cloudflare resources**:
    ```bash
-   # Create production KV namespace
-   wrangler kv namespace create PROPS_KV
-
-   # Create development KV namespace
-   wrangler kv namespace create DEV_PROPS_KV
-
    # Create D1 database
    wrangler d1 create waivers
 
-   # Create R2 bucket (via Cloudflare dashboard)
-   # Navigate to R2 and create bucket named "waivers"
+   # Create R2 bucket
+   wrangler r2 bucket create waivers
    ```
 
-3. **Update `wrangler.toml`** with your resource IDs:
-   - Production KV namespace ID (id field)
-   - Development KV namespace ID (preview_id field)
-   - D1 database ID
-   - Update email configuration
+3. **Update `wrangler.toml`** with your resource IDs
 
 4. **Initialize database**:
    ```bash
-   # Local database
-   wrangler d1 execute waivers --local --file=migrations/0001_init.sql
+   # Apply migrations in order
+   wrangler d1 execute waivers --remote --file=migrations/0001_schema.sql
+   wrangler d1 execute waivers --remote --file=migrations/0002_properties_activities.sql
+   wrangler d1 execute waivers --remote --file=migrations/0003_seed_data.sql
+   wrangler d1 execute waivers --remote --file=migrations/0004_add_legal_releases.sql
+   wrangler d1 execute waivers --remote --file=migrations/0005_add_verification_token.sql
+   wrangler d1 execute waivers --remote --file=migrations/0006_add_submission_activities.sql
+   wrangler d1 execute waivers --remote --file=migrations/0007_update_submissions_status.sql
+   wrangler d1 execute waivers --remote --file=migrations/0008_add_error_message.sql
 
-   # Remote database (requires API token)
-   wrangler d1 execute waivers --remote --file=migrations/0001_init.sql
+   # Or use the full schema for clean installs
+   wrangler d1 execute waivers --remote --file=migrations/schema_full.sql
    ```
 
-5. **Deploy browser rendering worker**:
+5. **Configure secrets**:
    ```bash
-   cd browser-worker
-   wrangler deploy
-   cd ..
+   wrangler secret put RESEND_API_KEY
    ```
 
-6. **Configure secrets** (for production):
+6. **Deploy**:
    ```bash
-   wrangler secret put CLOUDFLARE_ACCOUNT_ID
-   wrangler secret put CLOUDFLARE_API_TOKEN
-   ```
-
-7. **Populate property data** in KV:
-   ```bash
-   # Development namespace
-   wrangler kv key put --binding=PROPS_KV props '[{"id":"cabin-12","name":"Riverside Cabin 12","activities":[{"slug":"archery","label":"Archery"},{"slug":"kayaking","label":"Kayaking"},{"slug":"ziplining","label":"Ziplining"},{"slug":"snorkeling","label":"Snorkeling"},{"slug":"safari-tour","label":"Safari Tour"},{"slug":"boat-tour","label":"Boat Tour"},{"slug":"spelunking","label":"Spelunking"},{"slug":"scuba-diving","label":"Scuba Diving"},{"slug":"paragliding","label":"Paragliding"},{"slug":"bungee-jumping","label":"Bungee Jumping"}]}]' --preview
-
-   # Production namespace
-   wrangler kv key put --binding=PROPS_KV props '[{"id":"cabin-12","name":"Riverside Cabin 12","activities":[{"slug":"archery","label":"Archery"},{"slug":"kayaking","label":"Kayaking"},{"slug":"ziplining","label":"Ziplining"},{"slug":"snorkeling","label":"Snorkeling"},{"slug":"safari-tour","label":"Safari Tour"},{"slug":"boat-tour","label":"Boat Tour"},{"slug":"spelunking","label":"Spelunking"},{"slug":"scuba-diving","label":"Scuba Diving"},{"slug":"paragliding","label":"Paragliding"},{"slug":"bungee-jumping","label":"Bungee Jumping"}]}]'
-   ```
-
-8. **Deploy main worker**:
-   ```bash
-   wrangler deploy
+   git push origin main
+   # Auto-deploys via GitHub integration
    ```
 
 ## Development
 
 ### Development Mode
 
-The application includes a development mode that bypasses email sending and allows direct PDF downloads. This is useful for testing without configuring email services.
+When `DEV_MODE="true"`:
+- Synchronous PDF processing
+- Returns download buttons instead of sending email
+- PDFs accessible via `/download/:documentId` endpoint
 
-**When `DEV_MODE="true"` in `wrangler.toml`:**
-- Form submissions generate PDFs as normal
-- PDFs are stored in R2 but NOT emailed
-- User receives download buttons for each PDF
-- Multiple PDFs can be downloaded individually or all at once
-- A `/download/:key` endpoint is available for retrieving PDFs
-
-**To enable/disable development mode:**
-```toml
-# wrangler.toml
-[vars]
-DEV_MODE = "true"   # Development - PDFs downloadable
-# DEV_MODE = "false" # Production - PDFs emailed
-```
+When `DEV_MODE="false"` (production):
+- Asynchronous PDF processing with ctx.waitUntil()
+- Immediate response to user
+- Email sent after PDFs generated
+- Automatic retry with exponential backoff (1s, 2s, 4s)
 
 ### Local Development
 
-#### Using Remote Browser Worker
-Since the Browser Rendering API requires Cloudflare's infrastructure, local development uses the deployed browser-worker:
-
 ```bash
-# Option 1: Use remote flag (all remote resources)
+# Use remote flag to enable browser rendering
 wrangler dev --remote
-
-# Option 2: Use development config with selective remote bindings
-wrangler dev --config wrangler.dev.toml --local
 ```
 
-#### Development Setup
-1. Browser-worker must be deployed to Cloudflare first
-2. Local development uses:
-   - Local D1 database
-   - Local preview KV namespace (DEV_PROPS_KV)
-   - Local R2 storage
-   - **Remote browser-worker service** for PDF generation
-
-**Development Mode Features:**
-- Individual download buttons for each activity waiver
-- "Download All" button when multiple PDFs are generated
-- Visual indicator showing development mode is active
-- No email configuration required
-- PDFs still stored in R2 for persistence
-- Real PDF generation using remote browser service
+**Note**: Browser Rendering API requires remote execution and cannot run in pure local mode.
 
 ### Testing
-Browser worker includes test setup with Vitest:
+
 ```bash
-cd browser-worker
-npm test
+# Test batch PDF generation
+node scripts/test-batch-pdf.js
 ```
 
 ## File Structure
 
 ```
 .
-├── src/                      # Main worker source code
-│   ├── index.mjs            # Main entry point and route handlers
-│   ├── spa.js               # Single-page application (HTML/JS)
-│   ├── pdf.js               # PDF generation logic
-│   ├── mail.js              # Email composition and sending
-│   └── resp.js              # Response utilities
-├── browser-worker/          # Browser rendering service
-│   ├── src/index.js        # Browser worker implementation
-│   ├── package.json         # Browser worker dependencies
-│   └── test/                # Test files
-├── migrations/              # Database schema
-│   └── 0001_init.sql        # Initial database setup
-├── wrangler.toml           # Cloudflare Workers configuration
-├── package.json            # Main project dependencies
-└── tmp.json                # Sample property data
+├── src/
+│   ├── index.js                    # Main entry point
+│   ├── routes/
+│   │   ├── root.js                 # Root route handler
+│   │   ├── submit.js               # Submission handlers
+│   │   ├── status.js               # Status endpoint
+│   │   ├── download.js             # Dev mode downloads
+│   │   └── admin/                  # Admin routes
+│   ├── services/
+│   │   ├── pdf.js                  # PDF generation
+│   │   ├── mail.js                 # Email sending
+│   │   ├── storage.js              # Database operations
+│   │   ├── async-processor.js      # Async processing with retry
+│   │   └── validation.js           # Input validation
+│   ├── utils/
+│   │   ├── db.js                   # Database utilities
+│   │   ├── spa.js                  # SPA HTML builder
+│   │   ├── admin.js                # Admin utilities
+│   │   └── nanoid.js               # ID generation
+│   └── templates/
+│       ├── spa.html                # SPA template
+│       ├── spa.js                  # SPA JavaScript
+│       ├── admin.html              # Admin panel template
+│       ├── waiver.html             # PDF template
+│       └── email-*.html/txt        # Email templates
+├── migrations/                      # Database migrations
+├── scripts/                         # Utility scripts
+├── wrangler.toml                   # Cloudflare configuration
+└── package.json                    # Dependencies
 ```
 
 ## Features
 
 ### Guest Interface
-- **Responsive design**: Works on desktop and mobile devices
-- **Digital signature pad**: Touch-enabled signature capture
-- **Activity selection**: Click-to-select chip interface
-- **Real-time validation**: Form validation before submission
-- **Email confirmation**: Immediate feedback with attachment list
+- Two-step verification via email
+- Responsive design (desktop and mobile)
+- Digital signature pad with touch support
+- Activity selection with inline initials
+- Real-time validation
+- Immediate confirmation response
+- Email delivery with PDF attachments
 
-### Admin Features
-- **Search interface** (`/admin/search`): Query submissions by:
-  - Guest name
-  - Email address
-  - Property ID
-  - Check-in date
-- **Health check** (`/status`): Monitor database connectivity
+### Admin Panel Features
+- **Search**: Query submissions by name, email, property, date, or activity
+- **Properties Management**: Create, update, delete properties
+- **Activities Management**: Configure activities per property
+- **Releases Management**: Version-controlled legal text
+- **Risk Descriptions**: Manage risk level descriptions
+- **Document Verification**: View and verify submitted waivers
+- **Debug Interface**: Database inspection tools
 
 ### Security Features
-- **Input validation**: Server-side validation of all form inputs
-- **Secure storage**: PDFs stored in R2 with structured keys
-- **Email authentication**: API token-based email sending
-- **Activity-specific PINs**: Special codes for high-risk activities
+- Input validation (server-side)
+- Initials consistency validation
+- Token-based email verification (24-hour expiration)
+- Document hashing (SHA-256) for verification
+- Secure storage in R2 with structured keys
+- API token-based email sending
+- Activity-specific PINs for high-risk activities
+
+## Async Processing
+
+The system uses Cloudflare Workers' `ctx.waitUntil()` for background processing:
+
+1. Validates submission data immediately
+2. Returns success response to user (~1 second)
+3. Processes PDFs in background
+4. Retries on failure with exponential backoff:
+   - Attempt 1: Immediate
+   - Attempt 2: 1 second delay
+   - Attempt 3: 2 second delay
+   - Attempt 4: 4 second delay
+5. Updates submission status to 'emailed' or 'failed'
+6. Stores error message if all retries fail
 
 ## Deployment
 
-The application is configured for deployment on Cloudflare Workers:
+Push to main branch triggers automatic deployment via GitHub integration:
 
 ```bash
-# Deploy to production
-wrangler deploy
-
-# View logs
-wrangler tail
+git push origin main
 ```
+
+**Note**: No need to use `wrangler deploy` manually.
 
 ## Monitoring
 
-- **Logs**: Available via `wrangler tail` or Cloudflare dashboard
-- **Metrics**: Worker invocations and performance in Cloudflare dashboard
-- **Storage**: Monitor R2 usage and D1 queries in respective dashboards
+- **Logs**: Cloudflare Workers dashboard
+- **Status**: `/status` endpoint for health checks
+- **Failed Submissions**: Query `submissions` table where `status='failed'`
+- **Metrics**: Worker invocations and performance in dashboard
 
 ## Dependencies
 
-### Main Worker
-- `nanoid` (v5.1.6) - Unique ID generation
-
-### Browser Worker
-- `@cloudflare/puppeteer` - Browser automation for PDF generation
-- `wrangler` - Cloudflare Workers CLI
-- `vitest` - Testing framework
+- `nanoid` (5.1.6) - Unique ID generation
+- `resend` - Email API client
 
 ## License
 
-ISC License (as specified in package.json)
+ISC License
 
 ## Support
 
-For issues or questions:
+For issues:
 1. Check Cloudflare Workers documentation
-2. Review error logs with `wrangler tail`
-3. Verify all environment variables and bindings are configured
-4. Ensure D1 database is initialized with migration script
+2. Review logs in Cloudflare dashboard
+3. Verify environment variables and secrets
+4. Ensure database migrations are applied
+5. Test with `/status` endpoint
