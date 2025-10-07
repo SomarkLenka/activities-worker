@@ -1,4 +1,5 @@
 import { nanoid } from '../utils/nanoid.js';
+import waiverTemplate from '../templates/waiver.html';
 
 async function generateDocumentHash(data) {
   const hashInput = JSON.stringify({
@@ -29,139 +30,28 @@ function generateWaiverHTML(data, activityInfo, riskData, latestRelease, documen
   const riskLevel = activityInfo?.risk || 'medium';
   const activityLabel = activityInfo?.label || data.activity;
 
-  return `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <style>
-    @page {
-      size: A4;
-      margin: 50pt 50pt 80pt 50pt;
-    }
+  const riskDescriptionHtml = riskData?.description
+    ? `<div class="risk-description">${riskData.description}</div>`
+    : '';
 
-    body {
-      font-family: 'Helvetica', 'Arial', sans-serif;
-      font-size: 12pt;
-      line-height: 1.6;
-      color: #000;
-      margin: 0;
-      padding: 0;
-    }
+  const signatureHtml = data.signature
+    ? `<img src="${data.signature}" class="signature-image" alt="Guest signature" />`
+    : '<p class="no-signature">No signature provided</p>';
 
-    h1 {
-      font-size: 20pt;
-      font-weight: bold;
-      margin: 0 0 40px 0;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-
-    .details {
-      margin-bottom: 40px;
-      line-height: 2;
-      font-size: 12pt;
-    }
-
-    .risk-section {
-      margin: 30px 0 40px 0;
-    }
-
-    .risk-level {
-      font-weight: bold;
-      font-size: 12pt;
-      margin-bottom: 12px;
-    }
-
-    .risk-description {
-      color: #4d4d4d;
-      font-size: 10pt;
-      line-height: 1.5;
-      margin-bottom: 20px;
-    }
-
-    .waiver-section {
-      margin: 30px 0 40px 0;
-    }
-
-    .waiver-title {
-      font-weight: bold;
-      font-size: 12pt;
-      margin-bottom: 12px;
-    }
-
-    .waiver-text {
-      font-size: 9pt;
-      line-height: 1.55;
-      white-space: pre-wrap;
-      text-align: justify;
-    }
-
-    .signature-section {
-      margin-top: 50px;
-      page-break-inside: avoid;
-    }
-
-    .signature-label {
-      font-size: 12pt;
-      margin-bottom: 10px;
-      font-weight: normal;
-    }
-
-    .signature-image {
-      max-width: 400px;
-      max-height: 150px;
-      display: block;
-      margin-top: 10px;
-    }
-
-    .no-signature {
-      color: #808080;
-      font-size: 10pt;
-      font-style: italic;
-    }
-
-    .footer {
-      position: fixed;
-      bottom: 30pt;
-      right: 50pt;
-      text-align: right;
-      font-size: 7pt;
-      color: #808080;
-      line-height: 1.6;
-    }
-  </style>
-</head>
-<body>
-  <h1>${activityLabel.toUpperCase()} — Release of Liability</h1>
-
-  <div class="details">
-    Property  : ${data.propertyId}<br>
-    Check-in  : ${data.checkinDate}<br>
-    Guest     : ${data.guestName}<br>
-    Initials  : ${data.initials[data.activity]}
-  </div>
-
-  <div class="risk-section">
-    <div class="risk-level">Risk Level: ${riskLevel.toUpperCase()}</div>
-    ${riskData?.description ? `<div class="risk-description">${riskData.description}</div>` : ''}
-  </div>
-
-  <div class="waiver-section">
-    <div class="waiver-title">Waiver and Release:</div>
-    <div class="waiver-text">${latestRelease.waiver_text}</div>
-  </div>
-
-  <div class="signature-section">
-    <div class="signature-label">Signature:</div>
-    ${data.signature ? `<img src="${data.signature}" class="signature-image" alt="Guest signature" />` : '<p class="no-signature">No signature provided</p>'}
-  </div>
-
-  <div class="footer">
-    Legal Version ${latestRelease.version} (${latestRelease.release_date}) • Document ID: ${documentId}<br>
-    Verification Hash: ${documentHash.substring(0, 32)}...
-  </div>
-</body>
-</html>`;
+  return waiverTemplate
+    .replace('{{ACTIVITY_LABEL}}', activityLabel.toUpperCase())
+    .replace('{{PROPERTY_ID}}', data.propertyId)
+    .replace('{{CHECKIN_DATE}}', data.checkinDate)
+    .replace('{{GUEST_NAME}}', data.guestName)
+    .replace('{{INITIALS}}', data.initials[data.activity])
+    .replace('{{RISK_LEVEL}}', riskLevel.toUpperCase())
+    .replace('{{RISK_DESCRIPTION}}', riskDescriptionHtml)
+    .replace('{{WAIVER_TEXT}}', latestRelease.waiver_text)
+    .replace('{{SIGNATURE}}', signatureHtml)
+    .replace('{{RELEASE_VERSION}}', latestRelease.version)
+    .replace('{{RELEASE_DATE}}', latestRelease.release_date)
+    .replace('{{DOCUMENT_ID}}', documentId)
+    .replace('{{DOCUMENT_HASH_SHORT}}', documentHash.substring(0, 32));
 }
 
 export async function makePDFs(data, subId, env) {

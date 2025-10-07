@@ -8,6 +8,14 @@ main               = "src/index.js"
 workers_dev        = true                # "waiver-worker.<account>.workers.dev"
 route = { pattern = "activities.rtxsecured.com/*", zone_name = "rtxsecured.com" }
 
+[build]
+command = ""
+
+[rules]
+type = "Text"
+globs = ["**/*.html"]
+fallthrough = true
+
 # wrangler.toml (wrangler v3.88.0^)
 [observability.logs]
 enabled = true
