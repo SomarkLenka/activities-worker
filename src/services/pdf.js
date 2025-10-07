@@ -263,15 +263,15 @@ export async function makePDFs(data, subId, env) {
     // Use Cloudflare Browser Rendering via service binding
     let pdfBytes;
     try {
-      // Create a data URL with the HTML content
-      const htmlDataUrl = `data:text/html;base64,${btoa(unescape(encodeURIComponent(htmlContent)))}`;
-
-      // Try common endpoint patterns - adjust based on your browser-worker implementation
       const response = await env.BROWSER.fetch('https://render', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          url: htmlDataUrl
+          html: htmlContent,
+          options: {
+            format: 'A4',
+            printBackground: true
+          }
         })
       });
 
