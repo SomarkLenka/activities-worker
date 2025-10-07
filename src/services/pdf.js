@@ -1,7 +1,7 @@
 import { nanoid } from '../utils/nanoid.js';
 import waiverTemplate from '../templates/waiver.html';
 import { getLatestRelease, getActivitiesByProperty, getAllRiskDescriptions } from '../utils/db.js';
-import { generatePDFNative } from './pdf-native.js';
+//import { generatePDFNative } from './pdf-native.js';
 import { generatePDFWithPuppeteer, generateBatchPDFsWithPuppeteer } from './pdf-browser.js';
 
 function parseGuestName(guestName) {
@@ -153,7 +153,7 @@ export async function makePDFs(data, subId, env) {
           documentHash
         );
         pdfBytes = await generatePDFWithBrowser(htmlContent, env);
-      } else {
+      } /*else {
         pdfBytes = await generatePDFNative(
           { ...data, activity: act },
           activityInfo,
@@ -161,7 +161,7 @@ export async function makePDFs(data, subId, env) {
           latestRelease,
           documentId,
           documentHash
-        );
+        );*/
       }
 
       const filename = `${lastName}-${firstName}-${act}-${subId}.pdf`;
