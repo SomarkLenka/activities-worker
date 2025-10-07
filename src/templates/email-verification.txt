@@ -1,0 +1,13 @@
+Hi {{GUEST_NAME}},
+
+Thank you for starting your activity waiver submission!
+
+Please click the link below to continue and complete your waiver:
+{{VERIFICATION_URL}}
+
+This link will expire in 24 hours.
+
+If you didn't request this waiver, you can safely ignore this email.
+
+Regards,
+The Rentals Team

@@ -1,0 +1,7 @@
+Hi {{GUEST_NAME}},
+
+Thank you for completing your waiver for {{PROPERTY_ID}}.
+Attached: {{PDF_LIST}}
+
+{{ARCHERY_PIN}}Regards,
+The Rentals Team

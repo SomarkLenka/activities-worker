@@ -1,23 +1,15 @@
 import { Resend } from 'resend';
 import verificationEmailTemplate from '../templates/email-verification.html';
+import verificationTextTemplate from '../templates/email-verification.txt';
 import waiverEmailTemplate from '../templates/email-waiver.html';
+import waiverTextTemplate from '../templates/email-waiver.txt';
 
 export async function sendVerificationEmail(email, name, verificationUrl, env) {
   const resend = new Resend(env.RESEND_API_KEY);
 
-  const bodyText = `Hi ${name},
-
-Thank you for starting your activity waiver submission!
-
-Please click the link below to continue and complete your waiver:
-${verificationUrl}
-
-This link will expire in 24 hours.
-
-If you didn't request this waiver, you can safely ignore this email.
-
-Regards,
-The Rentals Team`;
+  const bodyText = verificationTextTemplate
+    .replace('{{GUEST_NAME}}', name)
+    .replace('{{VERIFICATION_URL}}', verificationUrl);
 
   const bodyHtml = verificationEmailTemplate
     .replace('{{GUEST_NAME}}', name)
@@ -47,25 +39,27 @@ The Rentals Team`;
 export async function sendWaiverEmail(data, pdfs, pin, env) {
   const resend = new Resend(env.RESEND_API_KEY);
 
-  const pdfList = pdfs.map(p => `<li>${p.filename}</li>`).join('');
+  const pdfListHtml = pdfs.map(p => `<li>${p.filename}</li>`).join('');
+  const pdfListText = pdfs.map(p => p.filename).join(', ');
+
   const archeryPinHtml = pin
     ? `<div style="background-color: #fef3c7; border: 2px solid #fbbf24; border-radius: 8px; padding: 16px; margin: 20px 0;">
          <p style="margin: 0; color: #78350f; font-weight: 600;">Your Archery PIN: <strong>${pin}</strong></p>
        </div>`
     : '';
 
-  const bodyText = `Hi ${data.guestName},
+  const archeryPinText = pin ? `Your Archery PIN is ${pin}\n\n` : '';
 
-Thank you for completing your waiver for ${data.propertyId}.
-Attached: ${pdfs.map(p => p.filename).join(', ')}
-
-${pin ? 'Your Archery PIN is ' + pin + '\n\n' : ''}Regards,
-The Rentals Team`;
+  const bodyText = waiverTextTemplate
+    .replace('{{GUEST_NAME}}', data.guestName)
+    .replace('{{PROPERTY_ID}}', data.propertyId)
+    .replace('{{PDF_LIST}}', pdfListText)
+    .replace('{{ARCHERY_PIN}}', archeryPinText);
 
   const bodyHtml = waiverEmailTemplate
     .replace('{{GUEST_NAME}}', data.guestName)
     .replace('{{PROPERTY_ID}}', data.propertyId)
-    .replace('{{PDF_LIST}}', pdfList)
+    .replace('{{PDF_LIST}}', pdfListHtml)
     .replace('{{ARCHERY_PIN}}', archeryPinHtml);
 
   try {
