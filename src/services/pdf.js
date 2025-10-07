@@ -27,6 +27,7 @@ async function generateDocumentHash(data) {
 
 function generateWaiverHTML(data, activityInfo, riskData, latestRelease, documentId, documentHash) {
   const riskLevel = activityInfo?.risk || 'medium';
+  const activityLabel = activityInfo?.label || data.activity;
 
   return `<!DOCTYPE html>
 <html>
@@ -35,90 +36,103 @@ function generateWaiverHTML(data, activityInfo, riskData, latestRelease, documen
   <style>
     @page {
       size: A4;
-      margin: 1in;
+      margin: 50pt 50pt 80pt 50pt;
     }
 
     body {
       font-family: 'Helvetica', 'Arial', sans-serif;
-      font-size: 11pt;
+      font-size: 12pt;
       line-height: 1.6;
       color: #000;
       margin: 0;
-      padding: 20px;
+      padding: 0;
     }
 
     h1 {
       font-size: 20pt;
       font-weight: bold;
-      margin-bottom: 30px;
+      margin: 0 0 40px 0;
       text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
 
     .details {
-      margin-bottom: 30px;
+      margin-bottom: 40px;
       line-height: 2;
+      font-size: 12pt;
     }
 
     .risk-section {
-      margin: 30px 0;
+      margin: 30px 0 40px 0;
     }
 
     .risk-level {
       font-weight: bold;
       font-size: 12pt;
-      margin-bottom: 10px;
+      margin-bottom: 12px;
     }
 
     .risk-description {
-      color: #4a4a4a;
+      color: #4d4d4d;
       font-size: 10pt;
+      line-height: 1.5;
       margin-bottom: 20px;
     }
 
     .waiver-section {
-      margin: 30px 0;
+      margin: 30px 0 40px 0;
     }
 
     .waiver-title {
       font-weight: bold;
       font-size: 12pt;
-      margin-bottom: 10px;
+      margin-bottom: 12px;
     }
 
     .waiver-text {
       font-size: 9pt;
-      line-height: 1.5;
+      line-height: 1.55;
       white-space: pre-wrap;
+      text-align: justify;
     }
 
     .signature-section {
-      margin-top: 40px;
+      margin-top: 50px;
       page-break-inside: avoid;
     }
 
     .signature-label {
       font-size: 12pt;
       margin-bottom: 10px;
+      font-weight: normal;
     }
 
     .signature-image {
       max-width: 400px;
       max-height: 150px;
+      display: block;
+      margin-top: 10px;
+    }
+
+    .no-signature {
+      color: #808080;
+      font-size: 10pt;
+      font-style: italic;
     }
 
     .footer {
       position: fixed;
-      bottom: 0.5in;
-      right: 1in;
+      bottom: 30pt;
+      right: 50pt;
       text-align: right;
       font-size: 7pt;
       color: #808080;
-      line-height: 1.4;
+      line-height: 1.6;
     }
   </style>
 </head>
 <body>
-  <h1>${data.activity.toUpperCase()} — Release of Liability</h1>
+  <h1>${activityLabel.toUpperCase()} — Release of Liability</h1>
 
   <div class="details">
     Property  : ${data.propertyId}<br>
@@ -139,7 +153,7 @@ function generateWaiverHTML(data, activityInfo, riskData, latestRelease, documen
 
   <div class="signature-section">
     <div class="signature-label">Signature:</div>
-    ${data.signature ? `<img src="${data.signature}" class="signature-image" />` : '<p style="color: #808080;">No signature provided</p>'}
+    ${data.signature ? `<img src="${data.signature}" class="signature-image" alt="Guest signature" />` : '<p class="no-signature">No signature provided</p>'}
   </div>
 
   <div class="footer">
