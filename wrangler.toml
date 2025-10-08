@@ -3,7 +3,7 @@
 
 name               = "activities-worker"
 compatibility_date = "2024-09-23"
-compatibility_flags = ["nodejs_compat_v2"]
+compatibility_flags = ["nodejs_compat"]
 main               = "src/index.js"
 workers_dev        = true                # "waiver-worker.<account>.workers.dev"
 route = { pattern = "activities.rtxsecured.com/*", zone_name = "rtxsecured.com" }

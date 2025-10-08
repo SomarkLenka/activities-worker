@@ -10,6 +10,6 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "@cloudflare/puppeteer": "^0.0.10"
+    "@cloudflare/puppeteer": "^1.0.4"
   }
 }

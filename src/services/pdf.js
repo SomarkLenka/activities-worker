@@ -141,28 +141,15 @@ export async function makePDFs(data, subId, env) {
     const documentHash = hashMap[act];
 
     try {
-      let pdfBytes;
-
-      if (USE_BROWSER) {
-        const htmlContent = generateWaiverHTML(
-          { ...data, activity: act },
-          activityInfo,
-          riskData,
-          latestRelease,
-          documentId,
-          documentHash
-        );
-        pdfBytes = await generatePDFWithBrowser(htmlContent, env);
-      } /*else {
-        pdfBytes = await generatePDFNative(
-          { ...data, activity: act },
-          activityInfo,
-          riskData,
-          latestRelease,
-          documentId,
-          documentHash
-        );*/
-      }
+      const htmlContent = generateWaiverHTML(
+        { ...data, activity: act },
+        activityInfo,
+        riskData,
+        latestRelease,
+        documentId,
+        documentHash
+      );
+      const pdfBytes = await generatePDFWithBrowser(htmlContent, env);
 
       const filename = `${lastName}-${firstName}-${act}-${subId}.pdf`;
       const key = `waivers/${y}/${m}/${d}/${data.propertyId}/${act}/${filename}`;
