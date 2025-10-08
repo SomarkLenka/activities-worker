@@ -65,8 +65,11 @@ export async function generatePDFWithPuppeteer(htmlContent, env) {
 }
 
 export async function generateBatchPDFsWithPuppeteer(batchItems, env) {
-  const maxConcurrency = 2;
-  console.log(`Batch processing ${batchItems.length} items with ${maxConcurrency} concurrent browsers`);
+  const maxConcurrency = 3;
+  const pagesPerBrowser = 3;
+  const rateLimitDelayMs = 20000; // 3 browsers per minute = 1 every 20 seconds
+
+  console.log(`Batch processing ${batchItems.length} items with ${maxConcurrency} concurrent browsers, ${pagesPerBrowser} pages each`);
 
   const chunks = Array.from({ length: maxConcurrency }, () => []);
   batchItems.forEach((item, index) => {
@@ -77,65 +80,84 @@ export async function generateBatchPDFsWithPuppeteer(batchItems, env) {
   console.log(`Distributed ${batchItems.length} items across ${nonEmptyChunks.length} browsers: ${nonEmptyChunks.map(c => c.length).join(', ')} items each`);
 
   try {
-    const allResults = [];
+    // Process all chunks in parallel with rate-limited browser launches
+    const chunkPromises = nonEmptyChunks.map(async (chunk, chunkIndex) => {
+      // Calculate delay to respect rate limit (3 browsers/minute)
+      const launchDelay = chunkIndex * rateLimitDelayMs;
 
-    for (let chunkIndex = 0; chunkIndex < nonEmptyChunks.length; chunkIndex++) {
-      const chunk = nonEmptyChunks[chunkIndex];
-      console.log(`Browser ${chunkIndex + 1}/${nonEmptyChunks.length} processing ${chunk.length} items: ${chunk.map(c => c.id).join(', ')}`);
-
-      if (chunkIndex > 0) {
-        const delayMs = 22000;
-        console.log(`Waiting ${delayMs}ms before launching next browser (rate limit: 3/minute)...`);
-        await sleep(delayMs);
+      if (launchDelay > 0) {
+        console.log(`Browser ${chunkIndex + 1} scheduled to launch in ${launchDelay}ms`);
+        await sleep(launchDelay);
       }
+
+      console.log(`Browser ${chunkIndex + 1}/${nonEmptyChunks.length} launching to process ${chunk.length} items: ${chunk.map(c => c.id).join(', ')}`);
 
       let browser;
       try {
         browser = await launchBrowserWithRetry(env);
-        const chunkResults = [];
 
-        for (const item of chunk) {
-          try {
-            const page = await browser.newPage();
-            await page.setContent(item.html, { waitUntil: 'networkidle0' });
+        // Process items in parallel batches within browser
+        const itemPromises = [];
+        for (let i = 0; i < chunk.length; i += pagesPerBrowser) {
+          const pageBatch = chunk.slice(i, i + pagesPerBrowser);
 
-            const pdf = await page.pdf({
-              format: 'A4',
-              printBackground: true,
-              margin: {
-                top: '1cm',
-                right: '1cm',
-                bottom: '1cm',
-                left: '1cm'
+          // Process this batch of pages in parallel
+          const batchPromise = Promise.all(pageBatch.map(async (item) => {
+            let page;
+            try {
+              page = await browser.newPage();
+              await page.setContent(item.html, { waitUntil: 'networkidle0' });
+
+              const pdf = await page.pdf({
+                format: 'A4',
+                printBackground: true,
+                margin: {
+                  top: '1cm',
+                  right: '1cm',
+                  bottom: '1cm',
+                  left: '1cm'
+                }
+              });
+
+              console.log(`Successfully processed item ${item.id}`);
+              return {
+                id: item.id,
+                success: true,
+                pdf: Buffer.from(pdf).toString('base64')
+              };
+            } catch (itemError) {
+              console.error(`Error processing item ${item.id}:`, itemError);
+              return {
+                id: item.id,
+                success: false,
+                error: itemError.message
+              };
+            } finally {
+              if (page) {
+                await page.close();
               }
-            });
+            }
+          }));
 
-            chunkResults.push({
-              id: item.id,
-              success: true,
-              pdf: Buffer.from(pdf).toString('base64')
-            });
-
-            await page.close();
-            console.log(`Successfully processed item ${item.id}`);
-          } catch (itemError) {
-            console.error(`Error processing item ${item.id}:`, itemError);
-            chunkResults.push({
-              id: item.id,
-              success: false,
-              error: itemError.message
-            });
-          }
+          itemPromises.push(batchPromise);
         }
 
-        allResults.push(...chunkResults);
+        const batchResults = await Promise.all(itemPromises);
+        const chunkResults = batchResults.flat();
+
+        console.log(`Browser ${chunkIndex + 1} completed ${chunkResults.length} items`);
+        return chunkResults;
       } finally {
         if (browser) {
           await browser.close();
           console.log(`Browser ${chunkIndex + 1} closed`);
         }
       }
-    }
+    });
+
+    // Wait for all chunks to complete
+    const allChunkResults = await Promise.all(chunkPromises);
+    const allResults = allChunkResults.flat();
 
     console.log(`Batch complete. Processed ${allResults.length} items`);
     return {
