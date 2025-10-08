@@ -66,11 +66,28 @@
   document.getElementById('initialForm').onsubmit = async e => {
     e.preventDefault();
 
+    const guestName = document.getElementById('name').value.trim();
+    const guestEmail = document.getElementById('email').value.trim();
+
+    // Validate name - must have at least first and last name
+    const nameParts = guestName.split(/\s+/).filter(p => p.length > 0);
+    if (nameParts.length < 2) {
+      alert('Please enter your full name (first and last name required)');
+      return;
+    }
+
+    // Validate email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(guestEmail)) {
+      alert('Please enter a valid email address');
+      return;
+    }
+
     const data = {
       propertyId: propSel.value,
       checkinDate: document.getElementById('date').value,
-      guestName: document.getElementById('name').value,
-      guestEmail: document.getElementById('email').value
+      guestName: guestName,
+      guestEmail: guestEmail
     };
 
     console.log("Submitting initial form:", data);
@@ -141,7 +158,7 @@
 
       const initialInput = document.createElement('input');
       initialInput.type = 'text';
-      initialInput.maxLength = 4;
+      initialInput.maxLength = 5;
       initialInput.placeholder = 'Initials';
       initialInput.className = 'activity-initial';
       initialInput.dataset.slug = a.slug;
@@ -264,12 +281,51 @@
       return;
     }
 
+    // Get guest name and extract first and last initials
+    const guestName = submission.guest_name.trim();
+    const nameParts = guestName.split(/\s+/).filter(p => p.length > 0);
+    const firstInitial = nameParts[0]?.charAt(0).toUpperCase();
+    const lastInitial = nameParts[nameParts.length - 1]?.charAt(0).toUpperCase();
+
+    // Validate initials for all activities
+    const initialsData = {};
+    for (const [slug, {initialInput}] of chosen) {
+      const initials = initialInput.value.trim().toUpperCase();
+
+      // Check length (2-5 characters)
+      if (initials.length < 2 || initials.length > 5) {
+        alert('Initials must be 2-5 characters');
+        initialInput.focus();
+        return;
+      }
+
+      // Check only letters
+      if (!/^[A-Z]+$/.test(initials)) {
+        alert('Initials must contain only letters');
+        initialInput.focus();
+        return;
+      }
+
+      // Check that initials start with first initial and contain last initial
+      if (!initials.startsWith(firstInitial)) {
+        alert('Initials must start with your first name initial (' + firstInitial + ')');
+        initialInput.focus();
+        return;
+      }
+
+      if (!initials.includes(lastInitial)) {
+        alert('Initials must include your last name initial (' + lastInitial + ')');
+        initialInput.focus();
+        return;
+      }
+
+      initialsData[slug] = initials;
+    }
+
     const data = {
       submissionId: submission.submission_id,
       activities: [...chosen.keys()],
-      initials: Object.fromEntries(
-        [...chosen.entries()].map(([slug, {initialInput}]) =>
-          [slug, initialInput.value])),
+      initials: initialsData,
       signature: canvas.toDataURL(),
       accepted: document.getElementById('master').checked
     };

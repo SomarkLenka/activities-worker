@@ -10,3 +10,4 @@ docs/
 package-lock.json
 migrations/backup.sql
 migrations/0008_add_error_message.sql
+authors.txt

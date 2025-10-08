@@ -15,6 +15,24 @@ export async function handleInitialSubmit(request, env) {
       });
     }
 
+    // Validate guest name - must have at least first and last name
+    const nameParts = data.guestName.trim().split(/\s+/).filter(p => p.length > 0);
+    if (nameParts.length < 2) {
+      return new Response(JSON.stringify({ ok: false, error: 'Please enter your full name (first and last name required)' }), {
+        status: 400,
+        headers: { 'content-type': 'application/json' }
+      });
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(data.guestEmail.trim())) {
+      return new Response(JSON.stringify({ ok: false, error: 'Please enter a valid email address' }), {
+        status: 400,
+        headers: { 'content-type': 'application/json' }
+      });
+    }
+
     const submissionId = nanoid(12);
     const verificationToken = nanoid(32);
     const createdAt = new Date().toISOString();
@@ -82,14 +100,6 @@ export async function handleCompleteSubmit(request, env, ctx) {
       });
     }
 
-    const initialsValidation = validateInitials(data.activities, data.initials);
-    if (!initialsValidation.valid) {
-      return new Response(JSON.stringify({ ok: false, error: initialsValidation.error }), {
-        status: 400,
-        headers: { 'content-type': 'application/json' }
-      });
-    }
-
     const submission = await env.waivers.prepare(
       'SELECT * FROM submissions WHERE submission_id = ? AND status = ?'
     ).bind(data.submissionId, 'pending').first();
@@ -97,6 +107,14 @@ export async function handleCompleteSubmit(request, env, ctx) {
     if (!submission) {
       return new Response(JSON.stringify({ ok: false, error: 'Invalid or expired submission' }), {
         status: 404,
+        headers: { 'content-type': 'application/json' }
+      });
+    }
+
+    const initialsValidation = validateInitials(data.activities, data.initials, submission.guest_name);
+    if (!initialsValidation.valid) {
+      return new Response(JSON.stringify({ ok: false, error: initialsValidation.error }), {
+        status: 400,
         headers: { 'content-type': 'application/json' }
       });
     }

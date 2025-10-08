@@ -46,7 +46,7 @@ export async function processWaiverAsync(submissionData, submissionId, verificat
   }
 }
 
-export function validateInitials(activities, initials) {
+export function validateInitials(activities, initials, guestName) {
   for (const activity of activities) {
     if (!initials[activity] || initials[activity].trim() === '') {
       return {
@@ -56,18 +56,47 @@ export function validateInitials(activities, initials) {
     }
   }
 
-  const initialValues = Object.values(initials);
-  const firstInitial = initialValues[0].trim().toUpperCase();
-
-  if (!/^[A-Z]{2,3}$/.test(firstInitial)) {
+  // Get first and last name initials from guest name
+  const nameParts = guestName.trim().split(/\s+/).filter(p => p.length > 0);
+  if (nameParts.length < 2) {
     return {
       valid: false,
-      error: 'Initials must be 2-3 letters only'
+      error: 'Guest name must include first and last name'
     };
   }
 
+  const firstInitial = nameParts[0].charAt(0).toUpperCase();
+  const lastInitial = nameParts[nameParts.length - 1].charAt(0).toUpperCase();
+
+  const initialValues = Object.values(initials);
+  const firstValue = initialValues[0].trim().toUpperCase();
+
+  // Validate format: 2-5 letters only
+  if (!/^[A-Z]{2,5}$/.test(firstValue)) {
+    return {
+      valid: false,
+      error: 'Initials must be 2-5 letters only'
+    };
+  }
+
+  // Validate that initials start with first name initial and contain last name initial
+  if (!firstValue.startsWith(firstInitial)) {
+    return {
+      valid: false,
+      error: `Initials must start with your first name initial (${firstInitial})`
+    };
+  }
+
+  if (!firstValue.includes(lastInitial)) {
+    return {
+      valid: false,
+      error: `Initials must include your last name initial (${lastInitial})`
+    };
+  }
+
+  // Validate all initials are the same
   for (const initial of initialValues) {
-    if (initial.trim().toUpperCase() !== firstInitial) {
+    if (initial.trim().toUpperCase() !== firstValue) {
       return {
         valid: false,
         error: 'All initials must be the same'
